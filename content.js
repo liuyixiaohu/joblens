@@ -1,14 +1,3 @@
-// ==UserScript==
-// @name         JobLens
-// @namespace    https://kunli.co
-// @version      1.0
-// @description  Smart LinkedIn job filter: flags Reposted, Applied, No Sponsor, Unpaid, and lets you skip companies & title keywords.
-// @match        https://www.linkedin.com/jobs/*
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @run-at       document-idle
-// ==/UserScript==
-
 (function () {
   "use strict";
 
@@ -59,12 +48,10 @@
     return reasons[0];
   }
 
-  let skippedCompanies = GM_getValue("skippedCompanies", []);
-  let skippedTitleKeywords = GM_getValue("skippedTitleKeywords", []);
-  let sponsorCheckEnabled = GM_getValue("sponsorCheckEnabled", true);
-  let unpaidCheckEnabled = GM_getValue("unpaidCheckEnabled", true);
-  let hasSeenIntro = GM_getValue("hasSeenIntro", false);
-  let panelPosition = GM_getValue("panelPosition", null);
+  let skippedCompanies = [];
+  let skippedTitleKeywords = [];
+  let sponsorCheckEnabled = true;
+  let unpaidCheckEnabled = true;
   let processedCards = new WeakSet();
   let lastDetailText = "";
 
@@ -81,10 +68,34 @@
 
   // UI 元素引用（在 createUI 中设置）
   let ui = {};
+  let hasSeenIntro = false;
+  let panelPosition = null;
 
   // 只在搜索结果页激活（/jobs/search/ 和 /jobs/search-results/）
   function isSearchPage() {
     return /\/jobs\/search/.test(location.href);
+  }
+
+  // ==================== 存储 ====================
+  async function loadSettings() {
+    const data = await chrome.storage.local.get({
+      skippedCompanies: [],
+      skippedTitleKeywords: [],
+      sponsorCheckEnabled: true,
+      unpaidCheckEnabled: true,
+      hasSeenIntro: false,
+      panelPosition: null,
+    });
+    skippedCompanies = data.skippedCompanies;
+    skippedTitleKeywords = data.skippedTitleKeywords;
+    sponsorCheckEnabled = data.sponsorCheckEnabled;
+    unpaidCheckEnabled = data.unpaidCheckEnabled;
+    hasSeenIntro = data.hasSeenIntro;
+    panelPosition = data.panelPosition;
+  }
+
+  function saveValue(key, value) {
+    chrome.storage.local.set({ [key]: value });
   }
 
   // ==================== DOM 工具函数 ====================
@@ -661,7 +672,7 @@
         // 保存拖动位置
         const rect = panel.getBoundingClientRect();
         panelPosition = { left: rect.left, top: rect.top };
-        GM_setValue("panelPosition", panelPosition);
+        saveValue("panelPosition", panelPosition);
       } else if (dragState && !dragState.dragged) {
         panel.classList.toggle("collapsed");
         togBtn.textContent = panel.classList.contains("collapsed") ? "+" : "\u2212";
@@ -689,7 +700,7 @@
         }
       });
       if (added > 0) {
-        GM_setValue(storageKey, list);
+        saveValue(storageKey, list);
         renderLists();
         refilterAll();
         if (added > 1) showToast("Added " + added + " items");
@@ -773,12 +784,12 @@
 
     const sponsorSwitch = makeSwitch("Detect No Sponsor", sponsorCheckEnabled, (on) => {
       sponsorCheckEnabled = on;
-      GM_setValue("sponsorCheckEnabled", on);
+      saveValue("sponsorCheckEnabled", on);
     });
 
     const unpaidSwitch = makeSwitch("Detect Unpaid", unpaidCheckEnabled, (on) => {
       unpaidCheckEnabled = on;
-      GM_setValue("unpaidCheckEnabled", on);
+      saveValue("unpaidCheckEnabled", on);
     });
 
     // ---- 淡化标记卡片开关 ----
@@ -827,7 +838,7 @@
       showToast("\u201C" + name + "\u201D already skipped"); return;
     }
     skippedCompanies.push(name);
-    GM_setValue("skippedCompanies", skippedCompanies);
+    saveValue("skippedCompanies", skippedCompanies);
     renderLists();
     refilterAll();
     showToast("Skipped: " + name);
@@ -898,7 +909,7 @@
     const key = type === "company" ? "skippedCompanies" : "skippedTitleKeywords";
     const reason = type === "company" ? "skippedCompany" : "skippedTitle";
     list.splice(index, 1);
-    GM_setValue(key, list);
+    saveValue(key, list);
     renderLists();
 
     // 从多标签中移除该 reason
@@ -974,7 +985,7 @@
         }
       }
     } catch (err) {
-      console.error("[LJF] Scan error:", err);
+      console.error("[JobLens] Scan error:", err);
       showToast("Scan error: " + err.message);
     }
 
@@ -997,16 +1008,20 @@
     if (scanning && !scanAbort) {
       btn.textContent = text || "Stop Scan";
       btn.classList.add("scanning");
+      // 进度条
+      let bar = btn.querySelector(".lj-scan-progress");
+      if (!bar) {
+        bar = document.createElement("div");
+        bar.className = "lj-scan-progress";
+        btn.appendChild(bar);
+      }
+      bar.style.width = (progress || 0) + "%";
     } else {
       btn.textContent = "Scan Jobs";
       btn.classList.remove("scanning");
+      const bar = btn.querySelector(".lj-scan-progress");
+      if (bar) bar.remove();
     }
-    // Progress bar
-    let bar = btn.querySelector(".lj-scan-progress");
-    if (progress != null) {
-      if (!bar) { bar = document.createElement("div"); bar.className = "lj-scan-progress"; btn.appendChild(bar); }
-      bar.style.width = progress + "%";
-    } else if (bar) { bar.remove(); }
   }
 
   function showScanDone(flagged) {
@@ -1014,28 +1029,36 @@
     if (!btn) return;
     btn.classList.remove("scanning");
     btn.classList.add("scan-done");
+    const bar = btn.querySelector(".lj-scan-progress");
+    if (bar) bar.remove();
     btn.textContent = flagged === 0
       ? "Scan complete \u2014 all clear"
       : "Scan complete \u2014 " + flagged + " flagged";
-    // Remove progress bar
-    const bar = btn.querySelector(".lj-scan-progress");
-    if (bar) bar.remove();
   }
 
   // ==================== 初始化 ====================
-  function init() {
+  async function init() {
     if (!isSearchPage()) return;
+    await loadSettings();
     createUI();
     filterJobCards();
     checkDetailPanel();
+
+    // 首次使用提示
     if (!hasSeenIntro) {
       showToast("Click Scan Jobs to filter all visible listings");
       hasSeenIntro = true;
-      GM_setValue("hasSeenIntro", true);
+      saveValue("hasSeenIntro", true);
     }
   }
 
-  // ==================== 键盘快捷键 ====================
+  if (document.readyState === "complete") {
+    setTimeout(init, 1500);
+  } else {
+    window.addEventListener("load", () => setTimeout(init, 1500));
+  }
+
+  // ==================== 键盘快捷键（Ctrl/Cmd + Shift + J） ====================
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "J" || e.key === "j")) {
       e.preventDefault();
@@ -1047,12 +1070,6 @@
       }
     }
   });
-
-  if (document.readyState === "complete") {
-    setTimeout(init, 1500);
-  } else {
-    window.addEventListener("load", () => setTimeout(init, 1500));
-  }
 
   // ==================== 统一观察器（合并 DOM 变化处理 + 单页路由检测） ====================
   let filterTimer = null;
