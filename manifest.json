@@ -9,6 +9,16 @@
       "matches": ["https://www.linkedin.com/jobs/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.linkedin.com/feed/*", "https://www.linkedin.com/"],
+      "css": ["feed.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.linkedin.com/feed/*", "https://www.linkedin.com/"],
+      "js": ["feed.js"],
+      "run_at": "document_idle"
     }
   ],
   "icons": {
