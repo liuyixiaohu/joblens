@@ -1,11 +1,326 @@
-/* Hide LinkedIn News right sidebar on the feed page */
-aside[aria-label="LinkedIn News"],
-[role="complementary"][aria-label="LinkedIn News"] {
+/* === Feed cleanup styles (toggled via body classes) === */
+
+/* Hide LinkedIn News sidebar + footer when enabled */
+body.lj-hide-sidebar aside[aria-label="LinkedIn News"],
+body.lj-hide-sidebar [role="complementary"][aria-label="LinkedIn News"],
+body.lj-hide-sidebar footer[aria-label="LinkedIn Footer Content"],
+body.lj-hide-sidebar [role="contentinfo"][aria-label="LinkedIn Footer Content"] {
   display: none !important;
 }
 
-/* Hide LinkedIn Footer Content */
-footer[aria-label="LinkedIn Footer Content"],
-[role="contentinfo"][aria-label="LinkedIn Footer Content"] {
+/* Hide Promoted posts when enabled */
+body.lj-hide-promoted [data-lj-promoted="true"] {
   display: none !important;
+}
+
+/* Hide Suggested posts when enabled */
+body.lj-hide-suggested [data-lj-suggested="true"] {
+  display: none !important;
+}
+
+/* Hide Recommended posts when enabled */
+body.lj-hide-recommended [data-lj-recommended="true"] {
+  display: none !important;
+}
+
+/* Hide non-connection posts when enabled */
+body.lj-hide-non-connections [data-lj-non-connection="true"] {
+  display: none !important;
+}
+
+/* Hide muted posts */
+[data-lj-muted="true"] {
+  display: none !important;
+}
+
+/* === Mute button on posts === */
+
+.lj-mute-btn {
+  background: none;
+  border: 1px solid #D9797B;
+  color: #D9797B;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: 'EB Garamond', Garamond, serif;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+  line-height: 1.4;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Show on hover over the post */
+[role="article"]:hover .lj-mute-btn {
+  opacity: 0.7;
+}
+
+.lj-mute-btn:hover {
+  opacity: 1 !important;
+  background: #D9797B;
+  color: #fff;
+}
+
+/* === Toast notification === */
+
+#lj-feed-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #1F2328;
+  color: #FAF7F2;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-family: 'EB Garamond', Garamond, serif;
+  font-size: 13px;
+  z-index: 100000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+#lj-feed-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* === Feed panel styles (same brand as Jobs panel) === */
+
+#lj-feed-panel {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  z-index: 99999;
+  background: rgba(250, 247, 242, 0.82);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  color: #1F2328;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  border: 1px solid #E4DDD2;
+  font-family: 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-size: 13px;
+  width: 220px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+#lj-feed-panel .lj-feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #E4DDD2;
+}
+
+#lj-feed-panel .lj-feed-header span {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1F2328;
+}
+
+#lj-feed-panel .lj-feed-header .lj-collapse-icon {
+  font-size: 12px;
+  color: #5A636B;
+  transition: transform 0.2s;
+}
+
+#lj-feed-panel .lj-feed-body {
+  padding: 10px 14px;
+}
+
+#lj-feed-panel .lj-feed-body.collapsed {
+  display: none;
+}
+
+/* Sections */
+#lj-feed-panel .lj-feed-section {
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #E4DDD2;
+}
+
+#lj-feed-panel .lj-feed-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+/* Toggle rows */
+#lj-feed-panel .lj-switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+#lj-feed-panel .lj-switch-row span {
+  font-size: 12px;
+  color: #1F2328;
+}
+
+#lj-feed-panel .lj-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#lj-feed-panel .lj-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+#lj-feed-panel .lj-switch .slider {
+  position: absolute;
+  inset: 0;
+  background: #E4DDD2;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+#lj-feed-panel .lj-switch .slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+#lj-feed-panel .lj-switch input:checked + .slider {
+  background: #5a8a6e;
+}
+
+#lj-feed-panel .lj-switch input:checked + .slider::before {
+  transform: translateX(16px);
+}
+
+/* Label rows */
+#lj-feed-panel .lj-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+#lj-feed-panel .lj-label {
+  font-weight: 600;
+  font-size: 12px;
+  color: #5A636B;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+#lj-feed-panel .lj-copy-btn {
+  background: none;
+  border: 1px solid #E4DDD2;
+  color: #5A636B;
+  border-radius: 4px;
+  padding: 1px 8px;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1.4;
+  font-family: 'EB Garamond', Garamond, serif;
+}
+
+/* List items */
+#lj-feed-panel .lj-list {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+#lj-feed-panel .lj-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+#lj-feed-panel .lj-list-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+#lj-feed-panel .lj-x {
+  background: none;
+  border: none;
+  color: #D9797B;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+#lj-feed-panel .lj-list-toggle {
+  background: none;
+  border: none;
+  color: #5A636B;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: 'EB Garamond', Garamond, serif;
+  padding: 3px 0;
+  width: 100%;
+  text-align: center;
+}
+
+/* Add input row */
+#lj-feed-panel .lj-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+#lj-feed-panel .lj-add input {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #E4DDD2;
+  border-radius: 6px;
+  color: #1F2328;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-family: 'EB Garamond', Garamond, serif;
+  outline: none;
+  min-width: 0;
+}
+
+#lj-feed-panel .lj-add button {
+  background: #1F2328;
+  color: #FAF7F2;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 11px;
+  font-family: 'EB Garamond', Garamond, serif;
+  white-space: nowrap;
+}
+
+/* Feedback link */
+#lj-feed-panel .lj-feedback {
+  display: block;
+  text-align: center;
+  color: #5A636B;
+  font-size: 11px;
+  text-decoration: none;
+  padding-top: 8px;
+}
+
+#lj-feed-panel .lj-feedback:hover {
+  color: #D9797B;
 }
