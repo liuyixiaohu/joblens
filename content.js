@@ -81,7 +81,7 @@
       unpaidCheckEnabled: true,
       hasSeenIntro: false,
       panelPosition: null,
-      dimFiltered: true,
+      dimFiltered: false,
     });
     skippedCompanies = data.skippedCompanies;
     skippedTitleKeywords = data.skippedTitleKeywords;
@@ -851,7 +851,10 @@
         else vis.classList.remove("lj-card-dimmed");
       });
     }
-    const dimSwitch = makeSwitch("Dim filtered cards", false, toggleDimCards);
+    const dimSwitch = makeSwitch("Dim filtered cards", cardsDimmed, (on) => {
+      toggleDimCards(on);
+      saveValue("dimFiltered", on);
+    });
 
     const switchSection = el("div", { className: "lj-section" }, [
       el("div", { className: "lj-label", textContent: "Options" }),
@@ -1043,11 +1046,12 @@
     if (scanning) { scanAbort = true; return; }
     scanning = true;
     scanAbort = false;
+    let total = 0;
 
     try {
       const cards = getJobCards();
       const toScan = cards.filter(c => !scannedCards.has(c) && !c.dataset.ljReasons);
-      const total = toScan.length;
+      total = toScan.length;
       updateScanButton("Scanning 0/" + total + "...", 0);
 
       for (let i = 0; i < toScan.length; i++) {

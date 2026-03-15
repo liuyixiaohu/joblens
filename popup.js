@@ -14,7 +14,7 @@
     mutedKeywords: [],
     sponsorCheckEnabled: true,
     unpaidCheckEnabled: true,
-    dimFiltered: true,
+    dimFiltered: false,
     skippedCompanies: [],
     skippedTitleKeywords: [],
     hideProfileSidebar: true,
