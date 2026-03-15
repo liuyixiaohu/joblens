@@ -106,6 +106,24 @@
     }
   }
 
+  // === Force Recent sort ===
+
+  function switchToRecent() {
+    // Open the sort dropdown, then click "Recent"
+    const svg = document.querySelector('[aria-label="Sort order dropdown button"]');
+    const sortBtn = svg && svg.closest("button");
+    if (!sortBtn) return;
+    // Already on Recent? Skip
+    if (sortBtn.textContent.replace(/\s+/g, " ").includes("Recent")) return;
+    sortBtn.click();
+    setTimeout(() => {
+      const items = document.querySelectorAll(".artdeco-dropdown__item");
+      for (const item of items) {
+        if (item.textContent.trim() === "Recent") { item.click(); break; }
+      }
+    }, 200);
+  }
+
   // === Mute button injection on posts ===
 
   function makeMuteBtn(name) {
@@ -262,9 +280,7 @@
     }));
     toggleSection.appendChild(createToggle("Force Recent", settings.forceRecent, (checked) => {
       saveSetting("forceRecent", checked);
-      if (checked && !location.pathname.startsWith("/feed/following")) {
-        location.href = "/feed/following/";
-      }
+      if (checked) switchToRecent();
     }));
     toggleSection.appendChild(createToggle("Hide Sidebar", settings.hideSidebar, (checked) => {
       saveSetting("hideSidebar", checked);
@@ -458,12 +474,6 @@
 
   // === Init ===
   loadSettings(() => {
-    // Redirect to Recent feed if enabled (before rendering anything)
-    if (settings.forceRecent && !location.pathname.startsWith("/feed/following")) {
-      location.href = "/feed/following/";
-      return;
-    }
-
     // Apply saved toggle states
     if (settings.hidePromoted) document.body.classList.add("lj-hide-promoted");
     if (settings.hideSuggested) document.body.classList.add("lj-hide-suggested");
@@ -477,6 +487,9 @@
 
     // Create panel
     createPanel();
+
+    // Switch to Recent sort if enabled
+    if (settings.forceRecent) switchToRecent();
 
     // Observe for new posts (infinite scroll)
     let debounceTimer = null;
