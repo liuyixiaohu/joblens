@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.1
+
+### Bug Fixes
+- Fixed floating panel becoming invisible when switching from external monitor to MacBook screen
+- Panel position is now clamped to viewport on restore, after drag, and on window resize
+
+### Improvements
+- Responsive panel layout: width and font size adapt to screen size using `clamp()` and multi-breakpoint media queries
+- Panel body max-height scales with viewport for better usability on smaller screens
+
+### Cleanup
+- Removed Tampermonkey userscript (`joblens.user.js`) — project is now Chrome Extension only
+
+---
+
 ## v1.0
 
 Initial public release.

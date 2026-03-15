@@ -560,14 +560,14 @@
     style.id = "lj-filter-styles";
     style.textContent = [
       // 面板（磨砂奶油色）
-      "#lj-filter-panel{position:fixed;top:70px;left:20px;z-index:99999;background:rgba(250,247,242,0.82);-webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);color:#1F2328;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.08);border:1px solid #E4DDD2;font-family:'EB Garamond',Garamond,'Times New Roman',serif;font-size:13px;width:280px;transition:width 0.2s}",
+      "#lj-filter-panel{position:fixed;top:70px;left:20px;z-index:99999;background:rgba(250,247,242,0.82);-webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);color:#1F2328;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.08);border:1px solid #E4DDD2;font-family:'EB Garamond',Garamond,'Times New Roman',serif;font-size:13px;width:clamp(200px,20vw,280px);transition:width 0.2s}",
       "#lj-filter-panel.collapsed{width:auto}",
       "#lj-filter-panel.collapsed .lj-body{display:none}",
       ".lj-header{background:rgba(243,239,231,0.7);padding:10px 14px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;user-select:none}",
       ".lj-header:active{cursor:grabbing}",
       "#lj-filter-panel.collapsed .lj-header{border-radius:12px}",
       ".lj-header h3{margin:0;font-size:14px;font-weight:600;color:#1F2328}",
-      ".lj-body{padding:12px 14px;max-height:70vh;overflow-y:auto}",
+      ".lj-body{padding:12px 14px;max-height:clamp(200px,55vh,70vh);overflow-y:auto}",
       // 扫描按钮
       ".lj-scan-btn{position:relative;overflow:hidden;background:#1F2328;color:#FAF7F2;border:none;border-radius:6px;padding:7px 0;cursor:pointer;font-weight:600;font-size:12px;font-family:'EB Garamond',Garamond,serif;width:100%;margin-top:12px;transition:opacity 0.2s}",
       ".lj-scan-progress{position:absolute;bottom:0;left:0;height:2px;background:rgba(255,255,255,0.4);transition:width 0.3s}",
@@ -624,10 +624,33 @@
       // 徽章容器
       ".lj-badges{position:absolute !important;left:0 !important;bottom:4px !important;z-index:10 !important;display:flex !important;flex-direction:column !important;gap:2px !important;pointer-events:none !important}",
       ".lj-badge{font-size:9px !important;font-weight:700 !important;padding:1px 6px !important;border-radius:8px !important;color:#fff !important;white-space:nowrap !important;line-height:1.4 !important;letter-spacing:0.3px !important}",
-      // 窄屏适配
-      "@media(max-width:600px){#lj-filter-panel{width:200px;font-size:12px}.lj-header h3{font-size:13px}.lj-body{padding:10px 12px}}",
+      // 响应式适配
+      "@media(max-width:1024px){#lj-filter-panel{font-size:12.5px}.lj-header h3{font-size:13.5px}}",
+      "@media(max-width:768px){#lj-filter-panel{font-size:12px}.lj-header h3{font-size:13px}.lj-body{padding:10px 12px;max-height:clamp(200px,50vh,60vh)}.lj-add button{padding:6px 8px;font-size:11px}}",
+      "@media(max-width:600px){#lj-filter-panel{font-size:11.5px}.lj-header h3{font-size:12px}.lj-body{padding:8px 10px;max-height:clamp(180px,45vh,50vh)}}",
     ].join("\n");
     document.head.appendChild(style);
+  }
+
+  // ==================== 面板位置约束 ====================
+  function clampPanelPosition(panel) {
+    const rect = panel.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const MARGIN = 10;
+    const MIN_VISIBLE = 60;
+
+    let left = rect.left;
+    let top = rect.top;
+
+    if (left + MIN_VISIBLE > vw) left = vw - MIN_VISIBLE;
+    if (left < MARGIN - rect.width + MIN_VISIBLE) left = MARGIN;
+    if (top < MARGIN) top = MARGIN;
+    if (top > vh - 40) top = vh - 50;
+
+    panel.style.left = left + "px";
+    panel.style.top = top + "px";
+    return { left, top };
   }
 
   // ==================== UI 面板 ====================
@@ -636,12 +659,6 @@
     injectStyles();
 
     const panel = el("div", { id: "lj-filter-panel" });
-
-    // 恢复上次拖动位置
-    if (panelPosition) {
-      panel.style.left = panelPosition.left + "px";
-      panel.style.top = panelPosition.top + "px";
-    }
 
     const togBtn = el("button", { className: "lj-toggle", textContent: "\u2212" });
     const header = el("div", { className: "lj-header" }, [
@@ -669,9 +686,8 @@
     });
     document.addEventListener("mouseup", () => {
       if (dragState && dragState.dragged) {
-        // 保存拖动位置
-        const rect = panel.getBoundingClientRect();
-        panelPosition = { left: rect.left, top: rect.top };
+        // 保存拖动位置（clamp 确保面板不超出视口）
+        panelPosition = clampPanelPosition(panel);
         saveValue("panelPosition", panelPosition);
       } else if (dragState && !dragState.dragged) {
         panel.classList.toggle("collapsed");
@@ -825,6 +841,21 @@
     panel.appendChild(header);
     panel.appendChild(body);
     document.body.appendChild(panel);
+
+    // 恢复上次拖动位置（DOM 中才能正确计算 getBoundingClientRect）
+    if (panelPosition) {
+      panel.style.left = panelPosition.left + "px";
+      panel.style.top = panelPosition.top + "px";
+      clampPanelPosition(panel);
+    }
+
+    // 监听窗口大小变化（切换显示器/缩放窗口时保证面板可见）
+    window.addEventListener("resize", () => {
+      const p = document.getElementById("lj-filter-panel");
+      if (!p) return;
+      panelPosition = clampPanelPosition(p);
+      saveValue("panelPosition", panelPosition);
+    });
 
     renderLists();
   }
