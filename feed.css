@@ -1,0 +1,11 @@
+/* Hide LinkedIn News right sidebar on the feed page */
+aside[aria-label="LinkedIn News"],
+[role="complementary"][aria-label="LinkedIn News"] {
+  display: none !important;
+}
+
+/* Hide LinkedIn Footer Content */
+footer[aria-label="LinkedIn Footer Content"],
+[role="contentinfo"][aria-label="LinkedIn Footer Content"] {
+  display: none !important;
+}
