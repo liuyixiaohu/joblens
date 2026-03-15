@@ -1104,38 +1104,54 @@
     }
   });
 
-  // ==================== Unified Observer (DOM mutation handling + SPA route detection) ====================
+  // ==================== SPA Route Detection (lightweight, no MutationObserver on body) ====================
+  let lastUrl = location.href;
+
+  function handleRouteChange() {
+    if (location.href === lastUrl) return;
+    lastUrl = location.href;
+    const onSearch = isSearchPage();
+    if (onSearch && !scanning) {
+      // Search page route change → reset state and re-initialize
+      processedCards = new WeakSet();
+      scannedCards = new WeakSet();
+      labeledJobs.clear();
+      scanAbort = false;
+      lastDetailText = "";
+      setTimeout(() => {
+        if (!document.getElementById("lj-filter-panel")) init();
+        else filterJobCards();
+        // Re-attach the narrowed observer for the new page
+        attachJobsObserver();
+      }, 2000);
+    } else if (!onSearch) {
+      // Left search page → remove panel
+      const panel = document.getElementById("lj-filter-panel");
+      if (panel) panel.remove();
+    }
+  }
+
+  // Detect SPA navigation via History API and popstate
+  window.addEventListener("popstate", handleRouteChange);
+  const origPushState = history.pushState;
+  const origReplaceState = history.replaceState;
+  history.pushState = function () {
+    origPushState.apply(this, arguments);
+    handleRouteChange();
+  };
+  history.replaceState = function () {
+    origReplaceState.apply(this, arguments);
+    handleRouteChange();
+  };
+
+  // ==================== Narrowed Jobs Observer (DOM mutations in jobs container only) ====================
   let filterTimer = null;
   let detailTimer = null;
   let badgeTimer = null;
-  let lastUrl = location.href;
+  let jobsObserver = null;
 
-  new MutationObserver(() => {
-    const onSearch = isSearchPage();
-
-    // SPA route change
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      if (onSearch && !scanning) {
-        // Search page route change → reset state and re-initialize
-        processedCards = new WeakSet();
-        scannedCards = new WeakSet();
-        labeledJobs.clear();
-        scanAbort = false;
-        lastDetailText = "";
-        setTimeout(() => {
-          if (!document.getElementById("lj-filter-panel")) init();
-          else filterJobCards();
-        }, 2000);
-      } else if (!onSearch) {
-        // Left search page → remove panel
-        const panel = document.getElementById("lj-filter-panel");
-        if (panel) panel.remove();
-      }
-    }
-
-    // Skip filtering logic on non-search pages
-    if (!onSearch) return;
+  function onJobsMutation() {
+    if (!isSearchPage()) return;
 
     // Card filtering (200ms debounce)
     clearTimeout(filterTimer);
@@ -1148,5 +1164,43 @@
     // Badge restoration (independent 1s debounce to avoid frequent DOM queries)
     clearTimeout(badgeTimer);
     badgeTimer = setTimeout(refreshBadges, 1000);
-  }).observe(document.body, { childList: true, subtree: true });
+  }
+
+  function attachJobsObserver() {
+    // Disconnect previous observer if any
+    if (jobsObserver) jobsObserver.disconnect();
+
+    jobsObserver = new MutationObserver(onJobsMutation);
+
+    // Narrow target: jobs list container → <main> → fallback to body
+    const container =
+      document.querySelector(".jobs-search-results-list") ||
+      document.querySelector("main") ||
+      document.body;
+
+    jobsObserver.observe(container, { childList: true, subtree: true });
+
+    // If we attached to a narrow container, also watch <main> for the detail
+    // panel which lives outside the results list but inside <main>
+    if (container.classList.contains("jobs-search-results-list")) {
+      const main = document.querySelector("main");
+      if (main && main !== container) {
+        jobsObserver.observe(main, { childList: true, subtree: true });
+      }
+    }
+  }
+
+  // Attach observer — use a bootstrap watcher if <main> isn't ready yet
+  if (document.querySelector("main") || document.querySelector(".jobs-search-results-list")) {
+    attachJobsObserver();
+  } else {
+    // Fallback: wait for main to appear, then attach narrowed observer
+    const bootObs = new MutationObserver(() => {
+      if (document.querySelector("main") || document.querySelector(".jobs-search-results-list")) {
+        bootObs.disconnect();
+        attachJobsObserver();
+      }
+    });
+    bootObs.observe(document.body, { childList: true, subtree: true });
+  }
 })();
