@@ -87,7 +87,7 @@
         article.dataset.ljTypeChecked = "1";
         if (hasLeafText(article, "Promoted")) article.dataset.ljPromoted = "true";
         if (hasLeafText(article, "Suggested")) article.dataset.ljSuggested = "true";
-        if (hasLeafText(article, "Recommended for you") || hasLeafText(article, "Jobs recommended for you")) {
+        if (hasLeafText(article, "Recommended for you") || hasLeafText(article, "Jobs recommended for you") || hasLeafText(article, "Popular course on LinkedIn Learning")) {
           article.dataset.ljRecommended = "true";
         }
         // Non-connection: has Follow button and no interaction header
