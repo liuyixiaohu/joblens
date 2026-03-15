@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360">
+  <title>JobLens</title>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-header">
+    <span class="popup-title">JobLens</span>
+    <span class="popup-version">v1.4</span>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="controls">Controls</button>
+    <button class="tab-btn" data-tab="stats">Stats</button>
+    <button class="tab-btn" data-tab="data">Data</button>
+  </div>
+
+  <div class="tab-content active" id="tab-controls"></div>
+  <div class="tab-content" id="tab-stats"></div>
+  <div class="tab-content" id="tab-data"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
