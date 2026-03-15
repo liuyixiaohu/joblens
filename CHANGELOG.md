@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.3
+
+### UX
+- Smooth collapse animation for filtered feed posts (replaces instant `display:none` removal)
+- Scroll nudge after filtering to trigger LinkedIn's infinite scroll and fill visual gaps
+- Draggable panels on feed and profile pages (position persists via chrome.storage.local)
+
+### Performance
+- MutationObserver in content.js narrowed from `document.body` to `.jobs-search-results-list` / `<main>`
+- SPA route detection replaced with History API interception (zero DOM overhead)
+- `waitForDetailChange()` polling replaced with MutationObserver (300ms interval → event-driven)
+- `detailPanelHasReposted()` selector scoped to detail panel with narrower element targets
+- `getDetailText()` sibling traversal capped at 15 iterations
+- `refreshBadges()` reduced from 3 calls to 2 (0s + 2s)
+- `filterJobCards()` early-exit when no new cards to process
+- Muted keyword check cached per article via WeakMap (avoids repeated `innerText` reads)
+
+---
+
 ## v1.2
 
 ### Feed Page
