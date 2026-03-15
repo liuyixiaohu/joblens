@@ -15,7 +15,7 @@
   function hidePromotedPosts() {
     const main = document.querySelector('main[role="main"]') || document.querySelector("main");
     if (!main) return;
-    const articles = main.querySelectorAll("article");
+    const articles = main.querySelectorAll('[role="article"]');
     for (const article of articles) {
       if (article.dataset.promotedChecked) continue;
       article.dataset.promotedChecked = "1";
