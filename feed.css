@@ -10,29 +10,24 @@ body.lj-hide-sidebar [role="contentinfo"][aria-label="LinkedIn Footer Content"] 
   display: none !important;
 }
 
-/* Hide Promoted posts when enabled */
-body.lj-hide-promoted [data-lj-promoted="true"] {
-  display: none !important;
-}
-
-/* Hide Suggested posts when enabled */
-body.lj-hide-suggested [data-lj-suggested="true"] {
-  display: none !important;
-}
-
-/* Hide Recommended posts when enabled */
-body.lj-hide-recommended [data-lj-recommended="true"] {
-  display: none !important;
-}
-
-/* Hide non-connection posts when enabled */
-body.lj-hide-non-connections [data-lj-non-connection="true"] {
-  display: none !important;
-}
-
-/* Hide muted posts */
+/* Smooth collapse for filtered feed posts */
+body.lj-hide-promoted [data-lj-promoted="true"],
+body.lj-hide-suggested [data-lj-suggested="true"],
+body.lj-hide-recommended [data-lj-recommended="true"],
+body.lj-hide-non-connections [data-lj-non-connection="true"],
 [data-lj-muted="true"] {
-  display: none !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border: none !important;
+  transition: max-height 0.3s ease-out,
+              opacity 0.2s ease-out,
+              padding 0.3s ease-out,
+              margin 0.3s ease-out !important;
 }
 
 /* === Mute button on posts === */

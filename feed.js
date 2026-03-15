@@ -48,6 +48,16 @@
     return match ? match[1].trim() : null;
   }
 
+  // === Scroll nudge: trigger LinkedIn's infinite scroll to fill gaps ===
+  let nudgeTimer = null;
+  function nudgeScroll() {
+    clearTimeout(nudgeTimer);
+    nudgeTimer = setTimeout(() => {
+      window.scrollBy(0, 1);
+      requestAnimationFrame(() => window.scrollBy(0, -1));
+    }, 400);            // wait for collapse animation to finish
+  }
+
   // === Filtering logic ===
 
   // Cached lowercase Sets for O(1) mute lookups (rebuilt when lists change)
@@ -195,6 +205,7 @@
     rebuildMuteCache();
     renderPeopleList();
     scanPosts();
+    nudgeScroll();
     showToast("Muted " + name);
   }
 
@@ -220,6 +231,7 @@
       rebuildMuteCache();
       renderKeywordList();
       scanPosts();
+      nudgeScroll();
       if (added > 1) showToast("Added " + added + " keywords");
     }
   }
@@ -273,18 +285,22 @@
     toggleSection.appendChild(createToggle("Hide Ads", settings.hidePromoted, (checked) => {
       saveSetting("hidePromoted", checked);
       document.body.classList.toggle("lj-hide-promoted", checked);
+      if (checked) nudgeScroll();
     }));
     toggleSection.appendChild(createToggle("Hide Suggested", settings.hideSuggested, (checked) => {
       saveSetting("hideSuggested", checked);
       document.body.classList.toggle("lj-hide-suggested", checked);
+      if (checked) nudgeScroll();
     }));
     toggleSection.appendChild(createToggle("Hide Recommended", settings.hideRecommended, (checked) => {
       saveSetting("hideRecommended", checked);
       document.body.classList.toggle("lj-hide-recommended", checked);
+      if (checked) nudgeScroll();
     }));
     toggleSection.appendChild(createToggle("Hide Strangers", settings.hideNonConnections, (checked) => {
       saveSetting("hideNonConnections", checked);
       document.body.classList.toggle("lj-hide-non-connections", checked);
+      if (checked) nudgeScroll();
     }));
     toggleSection.appendChild(createToggle("Force Recent", settings.forceRecent, (checked) => {
       saveSetting("forceRecent", checked);
@@ -511,6 +527,7 @@
       debounceTimer = setTimeout(() => {
         scanPosts();
         injectMuteButtons();
+        nudgeScroll();
       }, 300);
     });
     if (mainEl) {
