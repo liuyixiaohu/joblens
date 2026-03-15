@@ -19,6 +19,16 @@
       "matches": ["https://www.linkedin.com/feed/*", "https://www.linkedin.com/"],
       "js": ["feed.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.linkedin.com/in/*"],
+      "css": ["profile.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.linkedin.com/in/*"],
+      "js": ["profile.js"],
+      "run_at": "document_idle"
     }
   ],
   "icons": {

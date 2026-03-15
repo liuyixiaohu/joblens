@@ -1,0 +1,131 @@
+/* === Profile page cleanup styles (toggled via body classes) === */
+
+/* Hide right sidebar (ads, recommendations, "People you may know", etc.) */
+body.lj-hide-profile-sidebar aside[role="complementary"],
+body.lj-hide-profile-sidebar [role="complementary"]:not(main):not([role="main"]) {
+  display: none !important;
+}
+
+/* Hide footer */
+body.lj-hide-profile-sidebar footer[aria-label="LinkedIn Footer Content"],
+body.lj-hide-profile-sidebar [role="contentinfo"][aria-label="LinkedIn Footer Content"] {
+  display: none !important;
+}
+
+/* === Profile panel styles (same brand as Feed/Jobs panel) === */
+
+#lj-profile-panel {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  z-index: 99999;
+  background: rgba(250, 247, 242, 0.82);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  color: #1F2328;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  border: 1px solid #E4DDD2;
+  font-family: 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-size: 13px;
+  width: 200px;
+}
+
+#lj-profile-panel .lj-profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #E4DDD2;
+}
+
+#lj-profile-panel .lj-profile-header span {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1F2328;
+}
+
+#lj-profile-panel .lj-profile-header .lj-collapse-icon {
+  font-size: 12px;
+  color: #5A636B;
+  transition: transform 0.2s;
+}
+
+#lj-profile-panel .lj-profile-body {
+  padding: 10px 14px;
+}
+
+#lj-profile-panel .lj-profile-body.collapsed {
+  display: none;
+}
+
+/* Toggle rows */
+#lj-profile-panel .lj-switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+#lj-profile-panel .lj-switch-row span {
+  font-size: 12px;
+  color: #1F2328;
+}
+
+#lj-profile-panel .lj-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#lj-profile-panel .lj-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+#lj-profile-panel .lj-switch .slider {
+  position: absolute;
+  inset: 0;
+  background: #E4DDD2;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+#lj-profile-panel .lj-switch .slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+#lj-profile-panel .lj-switch input:checked + .slider {
+  background: #5a8a6e;
+}
+
+#lj-profile-panel .lj-switch input:checked + .slider::before {
+  transform: translateX(16px);
+}
+
+/* Feedback link */
+#lj-profile-panel .lj-feedback {
+  display: block;
+  text-align: center;
+  color: #5A636B;
+  font-size: 11px;
+  text-decoration: none;
+  padding-top: 8px;
+}
+
+#lj-profile-panel .lj-feedback:hover {
+  color: #D9797B;
+}
