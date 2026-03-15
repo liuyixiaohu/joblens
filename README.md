@@ -24,12 +24,6 @@ Smart LinkedIn job filter — flags Reposted, Applied, No Sponsor, Unpaid jobs, 
 4. Click **Load unpacked** and select the `joblens` folder
 5. Go to [LinkedIn Jobs](https://www.linkedin.com/jobs/) — the panel appears on the left
 
-### Tampermonkey (userscript)
-
-1. Install [Tampermonkey](https://www.tampermonkey.net/)
-2. Create a new script and paste the contents of `joblens.user.js`
-3. Save and visit LinkedIn Jobs
-
 ## Usage
 
 - The JobLens panel appears on the left side of LinkedIn job pages
