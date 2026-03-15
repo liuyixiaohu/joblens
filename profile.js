@@ -17,18 +17,8 @@
     chrome.storage.local.set({ [key]: value });
   }
 
-  // === Load EB Garamond font ===
-  function loadFont() {
-    if (document.querySelector('link[href*="EB+Garamond"]')) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;600;700&display=swap";
-    document.head.appendChild(link);
-  }
-
   // === Panel UI ===
   function createPanel() {
-    loadFont();
 
     const panel = document.createElement("div");
     panel.id = "lj-profile-panel";

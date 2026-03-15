@@ -50,30 +50,44 @@
 
   // === Filtering logic ===
 
-  function hasLeafText(article, text) {
-    const els = article.querySelectorAll("*");
-    for (const el of els) {
-      if (el.children.length === 0 && el.textContent.trim() === text) {
-        return true;
-      }
+  // Cached lowercase Sets for O(1) mute lookups (rebuilt when lists change)
+  let mutedPeopleSet = new Set();
+  let mutedKeywordsLower = [];
+
+  function rebuildMuteCache() {
+    mutedPeopleSet = new Set(settings.mutedPeople.map((n) => n.toLowerCase()));
+    mutedKeywordsLower = settings.mutedKeywords.map((k) => k.toLowerCase());
+  }
+
+  // Single-pass leaf text detection: one querySelectorAll("*") instead of 5
+  const POST_TYPE_LABELS = new Set([
+    "Promoted", "Suggested", "Recommended for you",
+    "Jobs recommended for you", "Popular course on LinkedIn Learning",
+  ]);
+
+  function detectPostLabels(article) {
+    const found = new Set();
+    for (const el of article.querySelectorAll("*")) {
+      if (el.children.length > 0) continue;
+      const t = el.textContent.trim();
+      if (POST_TYPE_LABELS.has(t)) found.add(t);
     }
-    return false;
+    return found;
   }
 
   function isMutedByPerson(article) {
-    if (settings.mutedPeople.length === 0) return false;
+    if (mutedPeopleSet.size === 0) return false;
     const author = getPostAuthor(article);
     const interactor = getInteractor(article);
-    const lowerList = settings.mutedPeople.map((n) => n.toLowerCase());
-    if (author && lowerList.includes(author.toLowerCase())) return true;
-    if (interactor && lowerList.includes(interactor.toLowerCase())) return true;
+    if (author && mutedPeopleSet.has(author.toLowerCase())) return true;
+    if (interactor && mutedPeopleSet.has(interactor.toLowerCase())) return true;
     return false;
   }
 
   function isMutedByKeyword(article) {
-    if (settings.mutedKeywords.length === 0) return false;
+    if (mutedKeywordsLower.length === 0) return false;
     const text = article.innerText.toLowerCase();
-    return settings.mutedKeywords.some((kw) => text.includes(kw.toLowerCase()));
+    return mutedKeywordsLower.some((kw) => text.includes(kw));
   }
 
   // Scan and tag all posts
@@ -82,12 +96,13 @@
     if (!main) return;
     const articles = main.querySelectorAll('[role="article"]');
     for (const article of articles) {
-      // Tag promoted & suggested (once, stable labels)
+      // Tag post type (once per post — labels are stable)
       if (!article.dataset.ljTypeChecked) {
         article.dataset.ljTypeChecked = "1";
-        if (hasLeafText(article, "Promoted")) article.dataset.ljPromoted = "true";
-        if (hasLeafText(article, "Suggested")) article.dataset.ljSuggested = "true";
-        if (hasLeafText(article, "Recommended for you") || hasLeafText(article, "Jobs recommended for you") || hasLeafText(article, "Popular course on LinkedIn Learning")) {
+        const labels = detectPostLabels(article);
+        if (labels.has("Promoted")) article.dataset.ljPromoted = "true";
+        if (labels.has("Suggested")) article.dataset.ljSuggested = "true";
+        if (labels.has("Recommended for you") || labels.has("Jobs recommended for you") || labels.has("Popular course on LinkedIn Learning")) {
           article.dataset.ljRecommended = "true";
         }
         // Non-connection: has Follow button and no interaction header
@@ -177,6 +192,7 @@
     if (settings.mutedPeople.some((n) => n.toLowerCase() === name.toLowerCase())) return;
     settings.mutedPeople.push(name);
     saveList("mutedPeople");
+    rebuildMuteCache();
     renderPeopleList();
     scanPosts();
     showToast("Muted " + name);
@@ -185,6 +201,7 @@
   function removeMutedPerson(name) {
     settings.mutedPeople = settings.mutedPeople.filter((n) => n.toLowerCase() !== name.toLowerCase());
     saveList("mutedPeople");
+    rebuildMuteCache();
     renderPeopleList();
     scanPosts();
   }
@@ -200,6 +217,7 @@
     }
     if (added > 0) {
       saveList("mutedKeywords");
+      rebuildMuteCache();
       renderKeywordList();
       scanPosts();
       if (added > 1) showToast("Added " + added + " keywords");
@@ -209,6 +227,7 @@
   function removeMutedKeyword(kw) {
     settings.mutedKeywords = settings.mutedKeywords.filter((k) => k.toLowerCase() !== kw.toLowerCase());
     saveList("mutedKeywords");
+    rebuildMuteCache();
     renderKeywordList();
     scanPosts();
   }
@@ -226,21 +245,10 @@
     setTimeout(() => toast.classList.remove("visible"), 1800);
   }
 
-  // === Load EB Garamond font ===
-  function loadFont() {
-    if (document.querySelector('link[href*="EB+Garamond"]')) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;600;700&display=swap";
-    document.head.appendChild(link);
-  }
-
   // === Panel UI ===
   let ui = {};
 
   function createPanel() {
-    loadFont();
-
     const panel = document.createElement("div");
     panel.id = "lj-feed-panel";
 
@@ -474,6 +482,9 @@
 
   // === Init ===
   loadSettings(() => {
+    // Build mute lookup caches
+    rebuildMuteCache();
+
     // Apply saved toggle states
     if (settings.hidePromoted) document.body.classList.add("lj-hide-promoted");
     if (settings.hideSuggested) document.body.classList.add("lj-hide-suggested");
@@ -491,14 +502,29 @@
     // Switch to Recent sort if enabled
     if (settings.forceRecent) switchToRecent();
 
-    // Observe for new posts (infinite scroll)
+    // Observe only <main> for new posts (infinite scroll)
+    // Narrower scope avoids self-triggered loops from panel/toast DOM changes
+    const mainEl = document.querySelector('main[role="main"]') || document.querySelector("main");
     let debounceTimer = null;
-    new MutationObserver(() => {
+    const observer = new MutationObserver(() => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         scanPosts();
         injectMuteButtons();
       }, 300);
-    }).observe(document.body, { childList: true, subtree: true });
+    });
+    if (mainEl) {
+      observer.observe(mainEl, { childList: true, subtree: true });
+    } else {
+      // Fallback: wait for main to appear, then observe it
+      const bodyObs = new MutationObserver(() => {
+        const m = document.querySelector('main[role="main"]') || document.querySelector("main");
+        if (m) {
+          bodyObs.disconnect();
+          observer.observe(m, { childList: true, subtree: true });
+        }
+      });
+      bodyObs.observe(document.body, { childList: true, subtree: true });
+    }
   });
 })();

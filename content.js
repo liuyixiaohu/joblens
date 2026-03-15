@@ -231,7 +231,9 @@
   // Avoids innerText which CSS can merge siblings into one line ("Applied · 1 week ago · Easy Apply")
   // Also naturally excludes company names like "Applied Materials" (textContent !== "Applied")
   function cardHasAppliedText(card) {
-    for (const el of card.querySelectorAll("*")) {
+    // Use targeted selectors instead of querySelectorAll("*")
+    // LinkedIn renders "Applied" as a leaf <span> or <li> inside job card metadata
+    for (const el of card.querySelectorAll("span, li, time")) {
       if (el.children.length === 0 &&
           el.textContent.trim() === "Applied" &&
           !el.closest(".lj-badges")) {
