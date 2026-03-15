@@ -96,16 +96,15 @@
     chrome.storage.local.set({ [key]: value });
   }
 
-  // ==================== Stats ====================
+  // Increment a stat counter (today + all-time). Writes only to stats keys,
+  // which the onChanged listener explicitly ignores to prevent feedback loops.
   function incrementStat(key, amount = 1) {
-    chrome.storage.local.get({ stats: { today: "", adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 }, statsAllTime: { adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 } }, (data) => {
+    chrome.storage.local.get({ stats: {}, statsAllTime: {} }, (d) => {
       const today = new Date().toISOString().slice(0, 10);
-      if (data.stats.today !== today) {
-        data.stats = { today, adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 };
-      }
-      data.stats[key] = (data.stats[key] || 0) + amount;
-      data.statsAllTime[key] = (data.statsAllTime[key] || 0) + amount;
-      chrome.storage.local.set(data);
+      if (d.stats.today !== today) d.stats = { today };
+      d.stats[key] = (d.stats[key] || 0) + amount;
+      d.statsAllTime[key] = (d.statsAllTime[key] || 0) + amount;
+      chrome.storage.local.set({ stats: d.stats, statsAllTime: d.statsAllTime });
     });
   }
 
@@ -156,6 +155,10 @@
       }
     });
 
+    // Fallback: /jobs/search/ uses scaffold list items without dismiss buttons
+    if (cards.length === 0) {
+      return [...document.querySelectorAll("li.scaffold-layout__list-item")];
+    }
     return cards;
   }
 
@@ -248,7 +251,7 @@
   function cardHasAppliedText(card) {
     // Use targeted selectors instead of querySelectorAll("*")
     // LinkedIn renders "Applied" as a leaf <span> or <li> inside job card metadata
-    for (const el of card.querySelectorAll("span, li, time")) {
+    for (const el of card.querySelectorAll("span, li, time, p")) {
       if (el.children.length === 0 &&
           el.textContent.trim() === "Applied" &&
           !el.closest(".lj-badges")) {
@@ -261,12 +264,12 @@
   // ==================== Check Detail Panel for Reposted ====================
   function detailPanelHasReposted() {
     // "Reposted" appears near the top of the detail panel in a <strong> or <span>
-    // Narrow scope to job detail container to avoid scanning the entire document
+    // Try narrow scope first (old /jobs/search/ layout), then fall back to document-wide search
     const detail =
       document.querySelector(".jobs-search__job-details") ||
       document.querySelector(".jobs-details") ||
-      document.querySelector("article");
-    if (!detail) return false;
+      document.querySelector("article") ||
+      document.body;  // fallback for /jobs/search-results/ which has no semantic container
     const candidates = detail.querySelectorAll("strong, span");
     for (const node of candidates) {
       if (node.children.length > 0) continue;
@@ -481,28 +484,25 @@
     // Early exit: skip if all cards are already processed (no new unprocessed cards)
     const hasNew = cards.some(c => !processedCards.has(c));
     if (!hasNew && cards.length > 0) {
-      // Still check for late-rendered "Applied" text (LinkedIn progressive render)
-      let foundNew = false;
-      for (const card of cards) {
-        if (!card.dataset.ljReasons?.includes("applied") && cardHasAppliedText(card)) {
-          labelCard(card, "applied");
-          foundNew = true;
-        }
-      }
-      if (!foundNew) return;
+      // Still check for late-rendered text or changed settings (bypasses processedCards)
+      // The main loop below handles these checks, so just let it run
     }
     cards.forEach((card) => {
-      // Applied check bypasses processedCards (LinkedIn progressive render: text may appear after DOM)
-      if (!card.dataset.ljReasons?.includes("applied")) {
-        if (cardHasAppliedText(card)) labelCard(card, "applied");
+      // These checks bypass processedCards — text may render late or settings may change
+      if (!card.dataset.ljReasons?.includes("applied") && cardHasAppliedText(card)) {
+        labelCard(card, "applied");
+      }
+      if (!card.dataset.ljReasons?.includes("skippedCompany") && isSkippedCompany(card)) {
+        labelCard(card, "skippedCompany");
+      }
+      if (!card.dataset.ljReasons?.includes("skippedTitle") && isSkippedTitle(card)) {
+        labelCard(card, "skippedTitle");
       }
 
       if (processedCards.has(card)) return;
       processedCards.add(card);
 
       if (cardHasRepostedText(card)) labelCard(card, "reposted");
-      if (isSkippedCompany(card)) labelCard(card, "skippedCompany");
-      if (isSkippedTitle(card)) labelCard(card, "skippedTitle");
     });
   }
 
@@ -851,10 +851,7 @@
         else vis.classList.remove("lj-card-dimmed");
       });
     }
-    const dimSwitch = makeSwitch("Dim filtered cards", cardsDimmed, (on) => {
-      toggleDimCards(on);
-      saveValue("dimFiltered", on);
-    });
+    const dimSwitch = makeSwitch("Dim filtered cards", false, toggleDimCards);
 
     const switchSection = el("div", { className: "lj-section" }, [
       el("div", { className: "lj-label", textContent: "Options" }),
@@ -1046,12 +1043,11 @@
     if (scanning) { scanAbort = true; return; }
     scanning = true;
     scanAbort = false;
-    let total = 0;
 
     try {
       const cards = getJobCards();
       const toScan = cards.filter(c => !scannedCards.has(c) && !c.dataset.ljReasons);
-      total = toScan.length;
+      const total = toScan.length;
       updateScanButton("Scanning 0/" + total + "...", 0);
 
       for (let i = 0; i < toScan.length; i++) {
@@ -1083,14 +1079,15 @@
     scanning = false;
     scanAbort = false;
 
-    incrementStat("jobsScanned", total);
-
     // Restore all lost badges immediately + one delayed pass after scan completes
     refreshBadges();
     setTimeout(refreshBadges, 2000);
 
     const flagged = getJobCards().filter(c => c.dataset.ljReasons).length;
     showScanDone(flagged);
+    let total = 0;
+    try { total = getJobCards().filter(c => scannedCards.has(c)).length; } catch (_) {}
+    if (total > 0) incrementStat("jobsScanned", total);
   }
 
   function updateScanButton(text, progress) {
@@ -1127,28 +1124,6 @@
       ? "Scan complete \u2014 all clear"
       : "Scan complete \u2014 " + flagged + " flagged";
   }
-
-  // ==================== Storage Change Listener (sync with Popup) ====================
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local") return;
-    chrome.storage.local.get({
-      skippedCompanies: [], skippedTitleKeywords: [],
-      sponsorCheckEnabled: true, unpaidCheckEnabled: true, dimFiltered: true
-    }, (data) => {
-      skippedCompanies = data.skippedCompanies;
-      skippedTitleKeywords = data.skippedTitleKeywords;
-      sponsorCheckEnabled = data.sponsorCheckEnabled;
-      unpaidCheckEnabled = data.unpaidCheckEnabled;
-      cardsDimmed = data.dimFiltered;
-      document.querySelectorAll("[data-lj-filtered]").forEach(card => {
-        const vis = getVisibleEl(card);
-        if (data.dimFiltered) vis.classList.add("lj-card-dimmed");
-        else vis.classList.remove("lj-card-dimmed");
-      });
-      renderLists();
-      filterJobCards();
-    });
-  });
 
   // ==================== Initialization ====================
   async function init() {
@@ -1225,6 +1200,11 @@
     handleRouteChange();
   };
 
+  // Fallback: poll for URL changes every 1s (catches Navigation API, link clicks, etc.)
+  setInterval(() => {
+    if (location.href !== lastUrl) handleRouteChange();
+  }, 1000);
+
   // ==================== Narrowed Jobs Observer (DOM mutations in jobs container only) ====================
   let filterTimer = null;
   let detailTimer = null;
@@ -1284,4 +1264,30 @@
     });
     bootObs.observe(document.body, { childList: true, subtree: true });
   }
+
+  // ==================== Popup ↔ Page Sync ====================
+  // Listen for settings changes from the popup. Ignore stats/statsAllTime keys
+  // to prevent incrementStat → onChanged → filterJobCards → labelCard → incrementStat loop.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    // Only react to actual setting keys, never to stats writes
+    const settingKeys = ["skippedCompanies", "skippedTitleKeywords",
+      "sponsorCheckEnabled", "unpaidCheckEnabled", "dimFiltered"];
+    const hasSettingChange = settingKeys.some(k => k in changes);
+    if (!hasSettingChange) return;
+
+    chrome.storage.local.get({
+      skippedCompanies: [], skippedTitleKeywords: [],
+      sponsorCheckEnabled: true, unpaidCheckEnabled: true, dimFiltered: false,
+    }, (data) => {
+      skippedCompanies = data.skippedCompanies;
+      skippedTitleKeywords = data.skippedTitleKeywords;
+      sponsorCheckEnabled = data.sponsorCheckEnabled;
+      unpaidCheckEnabled = data.unpaidCheckEnabled;
+      cardsDimmed = data.dimFiltered;
+      renderLists();
+      processedCards = new WeakSet();  // reset so all cards get re-evaluated with new settings
+      filterJobCards();
+    });
+  });
 })();
