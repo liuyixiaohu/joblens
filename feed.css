@@ -94,7 +94,7 @@ body.lj-hide-non-connections [data-lj-non-connection="true"] {
 #lj-feed-panel {
   position: fixed;
   top: 70px;
-  right: 20px;
+  left: calc(100vw - 240px);
   z-index: 99999;
   background: rgba(250, 247, 242, 0.82);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
