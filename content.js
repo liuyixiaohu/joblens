@@ -245,10 +245,14 @@
 
   // ==================== Check Detail Panel for Reposted ====================
   function detailPanelHasReposted() {
-    // Target leaf elements (LinkedIn wraps "Reposted X ago" in <strong> or <span>)
-    const candidates = document.querySelectorAll(
-      "strong, span, p, div:not(#lj-filter-panel):not(.lj-badges)"
-    );
+    // "Reposted" appears near the top of the detail panel in a <strong> or <span>
+    // Narrow scope to job detail container to avoid scanning the entire document
+    const detail =
+      document.querySelector(".jobs-search__job-details") ||
+      document.querySelector(".jobs-details") ||
+      document.querySelector("article");
+    if (!detail) return false;
+    const candidates = detail.querySelectorAll("strong, span");
     for (const node of candidates) {
       if (node.children.length > 0) continue;
       const t = node.textContent.trim();
@@ -282,9 +286,12 @@
         const wrapper = h.parentElement;
         let text = "";
         let sibling = wrapper?.nextElementSibling;
-        while (sibling) {
+        let sibCount = 0;
+        const MAX_SIBLINGS = 15;
+        while (sibling && sibCount < MAX_SIBLINGS) {
           text += " " + sibling.textContent;
           sibling = sibling.nextElementSibling;
+          sibCount++;
           if (sibling && sibling.querySelector && sibling.querySelector("h2")) break;
         }
         if (text.length > 0) return text;
@@ -452,9 +459,22 @@
     return null;
   }
 
-  // ==================== Filter Job Cards (check all conditions, no early exit) ====================
+  // ==================== Filter Job Cards (check all conditions) ====================
   function filterJobCards() {
     const cards = getJobCards();
+    // Early exit: skip if all cards are already processed (no new unprocessed cards)
+    const hasNew = cards.some(c => !processedCards.has(c));
+    if (!hasNew && cards.length > 0) {
+      // Still check for late-rendered "Applied" text (LinkedIn progressive render)
+      let foundNew = false;
+      for (const card of cards) {
+        if (!card.dataset.ljReasons?.includes("applied") && cardHasAppliedText(card)) {
+          labelCard(card, "applied");
+          foundNew = true;
+        }
+      }
+      if (!foundNew) return;
+    }
     cards.forEach((card) => {
       // Applied check bypasses processedCards (LinkedIn progressive render: text may appear after DOM)
       if (!card.dataset.ljReasons?.includes("applied")) {
@@ -974,14 +994,32 @@
 
   function waitForDetailChange(oldFingerprint, timeoutMs = 5000) {
     return new Promise((resolve) => {
-      const start = Date.now();
-      const poll = setInterval(() => {
+      const detailContainer =
+        document.querySelector(".jobs-search__job-details") ||
+        document.querySelector("main") ||
+        document.body;
+
+      let settled = false;
+      function settle() {
+        if (settled) return;
+        settled = true;
+        observer.disconnect();
+        clearTimeout(timeout);
+        resolve();
+      }
+
+      const observer = new MutationObserver(() => {
         const current = getDetailFingerprint();
-        if ((current && current !== oldFingerprint) || Date.now() - start > timeoutMs) {
-          clearInterval(poll);
-          resolve();
-        }
-      }, 300);
+        if (current && current !== oldFingerprint) settle();
+      });
+
+      observer.observe(detailContainer, { childList: true, subtree: true, characterData: true });
+
+      const timeout = setTimeout(settle, timeoutMs);
+
+      // Check once immediately in case the change already happened
+      const current = getDetailFingerprint();
+      if (current && current !== oldFingerprint) settle();
     });
   }
 
@@ -1025,10 +1063,9 @@
     scanning = false;
     scanAbort = false;
 
-    // Restore all lost badges immediately + with delays after scan completes
+    // Restore all lost badges immediately + one delayed pass after scan completes
     refreshBadges();
-    setTimeout(refreshBadges, 1000);
-    setTimeout(refreshBadges, 3000);
+    setTimeout(refreshBadges, 2000);
 
     const flagged = getJobCards().filter(c => c.dataset.ljReasons).length;
     showScanDone(flagged);

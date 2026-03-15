@@ -100,9 +100,16 @@
     return false;
   }
 
+  // WeakMap cache for lowercase innerText (posts don't change content between scans)
+  const articleTextCache = new WeakMap();
+
   function isMutedByKeyword(article) {
     if (mutedKeywordsLower.length === 0) return false;
-    const text = article.innerText.toLowerCase();
+    let text = articleTextCache.get(article);
+    if (text === undefined) {
+      text = article.innerText.toLowerCase();
+      articleTextCache.set(article, text);
+    }
     return mutedKeywordsLower.some((kw) => text.includes(kw));
   }
 
