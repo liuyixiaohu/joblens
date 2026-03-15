@@ -62,10 +62,7 @@
   let cardsDimmed = false;
   const SCAN_DELAY_MS = 1500;
 
-  // UI element references (set in createUI)
-  let ui = {};
   let hasSeenIntro = false;
-  let panelPosition = null;
 
   // Only activate on search results pages (/jobs/search/ and /jobs/search-results/)
   function isSearchPage() {
@@ -80,18 +77,31 @@
       sponsorCheckEnabled: true,
       unpaidCheckEnabled: true,
       hasSeenIntro: false,
-      panelPosition: null,
+      dimFiltered: true,
     });
     skippedCompanies = data.skippedCompanies;
     skippedTitleKeywords = data.skippedTitleKeywords;
     sponsorCheckEnabled = data.sponsorCheckEnabled;
     unpaidCheckEnabled = data.unpaidCheckEnabled;
     hasSeenIntro = data.hasSeenIntro;
-    panelPosition = data.panelPosition;
+    cardsDimmed = data.dimFiltered;
   }
 
   function saveValue(key, value) {
     chrome.storage.local.set({ [key]: value });
+  }
+
+  // ==================== Stats ====================
+  function incrementStat(key, amount = 1) {
+    chrome.storage.local.get({ stats: { today: "", adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 }, statsAllTime: { adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 } }, (data) => {
+      const today = new Date().toISOString().slice(0, 10);
+      if (data.stats.today !== today) {
+        data.stats = { today, adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 };
+      }
+      data.stats[key] = (data.stats[key] || 0) + amount;
+      data.statsAllTime[key] = (data.statsAllTime[key] || 0) + amount;
+      chrome.storage.local.set(data);
+    });
   }
 
   // ==================== DOM Utilities ====================
@@ -257,7 +267,7 @@
       if (node.children.length > 0) continue;
       const t = node.textContent.trim();
       if (t.length > 0 && t.length < 80 && t.toLowerCase().startsWith("reposted")) {
-        if (!node.closest("#lj-filter-panel") && !node.closest(".lj-badges")) return true;
+        if (!node.closest(".lj-badges")) return true;
       }
     }
     return false;
@@ -333,6 +343,8 @@
     }
 
     applyBadges(card);
+    incrementStat("jobsFlagged");
+    updateBadgeCount();
     return true;
   }
 
@@ -577,63 +589,6 @@
     const style = document.createElement("style");
     style.id = "lj-filter-styles";
     style.textContent = [
-      // Panel (frosted cream)
-      "#lj-filter-panel{position:fixed;top:70px;left:20px;z-index:99999;background:rgba(250,247,242,0.82);-webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);color:#1F2328;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.08);border:1px solid #E4DDD2;font-family:'EB Garamond',Garamond,'Times New Roman',serif;font-size:13px;width:clamp(200px,20vw,280px);transition:width 0.2s}",
-      "#lj-filter-panel.collapsed{width:auto}",
-      "#lj-filter-panel.collapsed .lj-body{display:none}",
-      ".lj-header{background:rgba(243,239,231,0.7);padding:10px 14px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;user-select:none}",
-      ".lj-header:active{cursor:grabbing}",
-      "#lj-filter-panel.collapsed .lj-header{border-radius:12px}",
-      ".lj-header h3{margin:0;font-size:14px;font-weight:600;color:#1F2328}",
-      ".lj-body{padding:12px 14px;max-height:clamp(200px,55vh,70vh);overflow-y:auto}",
-      // Scan button
-      ".lj-scan-btn{position:relative;overflow:hidden;background:#1F2328;color:#FAF7F2;border:none;border-radius:6px;padding:7px 0;cursor:pointer;font-weight:600;font-size:12px;font-family:'EB Garamond',Garamond,serif;width:100%;margin-top:12px;transition:opacity 0.2s}",
-      ".lj-scan-progress{position:absolute;bottom:0;left:0;height:2px;background:rgba(255,255,255,0.4);transition:width 0.3s}",
-      ".lj-scan-btn:hover{opacity:0.8}",
-      ".lj-scan-btn.scanning{background:#D9797B;color:#fff}",
-      ".lj-scan-btn.scan-done{background:#5a8a6e;color:#fff}",
-      // Sections
-      ".lj-section{margin-bottom:12px;border-top:1px solid #E4DDD2;padding-top:10px}",
-      ".lj-section:first-of-type{border-top:none;padding-top:0}",
-      ".lj-label{font-size:11px;color:#5A636B;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:600}",
-      ".lj-label-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}",
-      ".lj-label-row .lj-label{margin-bottom:0}",
-      ".lj-copy-btn{background:none;border:1px solid #E4DDD2;color:#5A636B;border-radius:4px;padding:1px 8px;cursor:pointer;font-size:10px;line-height:1.4;font-family:'EB Garamond',Garamond,serif}",
-      ".lj-copy-btn:hover{color:#1F2328;border-color:#1F2328}",
-      // Lists
-      ".lj-list{margin-bottom:8px}",
-      ".lj-list-toggle{background:none;border:none;color:#5A636B;cursor:pointer;font-size:11px;font-family:'EB Garamond',Garamond,serif;padding:3px 0;width:100%;text-align:center}",
-      ".lj-list-toggle:hover{color:#1F2328}",
-      ".lj-list::-webkit-scrollbar{width:4px}",
-      ".lj-list::-webkit-scrollbar-thumb{background:#E4DDD2;border-radius:4px}",
-      ".lj-item{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:#F3EFE7;border-radius:6px;margin-bottom:3px}",
-      ".lj-item span{color:#1F2328;font-size:12px}",
-      ".lj-x{background:none;border:none;color:#D9797B;cursor:pointer;font-size:16px;padding:0 2px;line-height:1}",
-      ".lj-x:hover{color:#9a6868}",
-      // Input + button
-      ".lj-add{display:flex;gap:6px}",
-      ".lj-add input{flex:1;background:#fff;border:1px solid #E4DDD2;border-radius:6px;color:#1F2328;padding:6px 10px;font-size:12px;font-family:'EB Garamond',Garamond,serif;outline:none}",
-      ".lj-add input:focus{border-color:#5A636B}",
-      ".lj-add button{background:#1F2328;color:#FAF7F2;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:12px;font-family:'EB Garamond',Garamond,serif;white-space:nowrap}",
-      ".lj-add button:hover{opacity:0.8}",
-      ".lj-toggle{background:none;border:none;color:#5A636B;cursor:pointer;font-size:18px;padding:0;line-height:1}",
-      ".lj-empty{color:#8A939B;font-size:11px;padding:4px 0;font-style:italic}",
-      // Quick skip button
-      ".lj-quick-skip{margin-top:8px;padding-top:8px;border-top:1px solid #E4DDD2}",
-      ".lj-quick-skip-btn{background:#F3EFE7;color:#9a6868;border:1px solid #E4DDD2;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:11px;font-family:'EB Garamond',Garamond,serif;width:100%;text-align:center}",
-      ".lj-quick-skip-btn:hover{background:#E4DDD2}",
-      // Footer link
-      ".lj-feedback{display:block;text-align:center;margin-top:10px;font-size:11px;color:#8A939B;text-decoration:none;letter-spacing:0.3px}",
-      ".lj-feedback:hover{color:#5A636B}",
-      // Toggle switch row
-      ".lj-switch-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0}",
-      ".lj-switch-row span{font-size:12px;color:#1F2328}",
-      ".lj-switch{position:relative;width:36px;height:20px;cursor:pointer}",
-      ".lj-switch input{opacity:0;width:0;height:0}",
-      ".lj-switch .slider{position:absolute;inset:0;background:#E4DDD2;border-radius:10px;transition:background 0.2s}",
-      ".lj-switch .slider::before{content:'';position:absolute;width:16px;height:16px;left:2px;top:2px;background:#fff;border-radius:50%;transition:transform 0.2s}",
-      ".lj-switch input:checked+.slider{background:#5a8a6e}",
-      ".lj-switch input:checked+.slider::before{transform:translateX(16px)}",
       // Dimmed card styles
       ".lj-card-dimmed{opacity:0.35 !important;transition:opacity 0.2s}",
       ".lj-card-dimmed:hover{opacity:0.7 !important}",
@@ -642,246 +597,51 @@
       // Badge container
       ".lj-badges{position:absolute !important;left:0 !important;bottom:4px !important;z-index:10 !important;display:flex !important;flex-direction:column !important;gap:2px !important;pointer-events:none !important}",
       ".lj-badge{font-size:9px !important;font-weight:700 !important;padding:1px 6px !important;border-radius:8px !important;color:#fff !important;white-space:nowrap !important;line-height:1.4 !important;letter-spacing:0.3px !important}",
-      // Responsive breakpoints
-      "@media(max-width:1024px){#lj-filter-panel{font-size:12.5px}.lj-header h3{font-size:13.5px}}",
-      "@media(max-width:768px){#lj-filter-panel{font-size:12px}.lj-header h3{font-size:13px}.lj-body{padding:10px 12px;max-height:clamp(200px,50vh,60vh)}.lj-add button{padding:6px 8px;font-size:11px}}",
-      "@media(max-width:600px){#lj-filter-panel{font-size:11.5px}.lj-header h3{font-size:12px}.lj-body{padding:8px 10px;max-height:clamp(180px,45vh,50vh)}}",
+      // Mini badge container
+      "#lj-mini-container{position:fixed;bottom:20px;right:20px;z-index:99999;display:flex;gap:8px;align-items:center}",
+      "#lj-mini-badge{background:rgba(250,247,242,0.92);backdrop-filter:blur(12px);border:1px solid #E4DDD2;border-radius:20px;padding:6px 14px;font-family:'EB Garamond',serif;font-size:13px;color:#1F2328;box-shadow:0 2px 8px rgba(0,0,0,0.06);user-select:none}",
+      "#lj-mini-scan{background:#1F2328;color:#FAF7F2;border:none;border-radius:16px;padding:6px 14px;font-family:'EB Garamond',serif;font-size:13px;cursor:pointer}",
+      "#lj-mini-scan:hover{opacity:0.8}",
     ].join("\n");
     document.head.appendChild(style);
   }
 
-  // ==================== Panel Position Clamping ====================
-  function clampPanelPosition(panel) {
-    const rect = panel.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const MARGIN = 10;
-    const MIN_VISIBLE = 60;
+  // ==================== Mini Badge ====================
+  function createMiniBadge() {
+    if (document.getElementById("lj-mini-container")) return;
 
-    let left = rect.left;
-    let top = rect.top;
+    const badge = document.createElement("div");
+    badge.id = "lj-mini-badge";
 
-    if (left + MIN_VISIBLE > vw) left = vw - MIN_VISIBLE;
-    if (left < MARGIN - rect.width + MIN_VISIBLE) left = MARGIN;
-    if (top < MARGIN) top = MARGIN;
-    if (top > vh - 40) top = vh - 50;
+    const scanBtn = document.createElement("button");
+    scanBtn.id = "lj-mini-scan";
+    scanBtn.textContent = "Scan";
+    scanBtn.onclick = () => {
+      if (scanning) { scanAbort = true; } else { autoScanCards(); }
+    };
 
-    panel.style.left = left + "px";
-    panel.style.top = top + "px";
-    return { left, top };
+    const container = document.createElement("div");
+    container.id = "lj-mini-container";
+    container.appendChild(badge);
+    container.appendChild(scanBtn);
+    document.body.appendChild(container);
+    updateBadgeCount();
   }
 
-  // ==================== UI Panel ====================
-  function createUI() {
-    if (document.getElementById("lj-filter-panel")) return;
-    injectStyles();
-
-    const panel = el("div", { id: "lj-filter-panel" });
-
-    const togBtn = el("button", { className: "lj-toggle", textContent: "\u2212" });
-    const header = el("div", { className: "lj-header" }, [
-      el("h3", { textContent: "JobLens" }),
-      togBtn
-    ]);
-
-    // ---- Drag + click (>4px movement = drag, otherwise = toggle collapse) ----
-    let dragState = null;
-    header.addEventListener("mousedown", (e) => {
-      if (e.target === togBtn) return; // toggle button excluded from drag
-      const rect = panel.getBoundingClientRect();
-      dragState = { startX: e.clientX, startY: e.clientY, origLeft: rect.left, origTop: rect.top, dragged: false };
-      e.preventDefault();
-    });
-    document.addEventListener("mousemove", (e) => {
-      if (!dragState) return;
-      const dx = e.clientX - dragState.startX;
-      const dy = e.clientY - dragState.startY;
-      if (!dragState.dragged && Math.abs(dx) + Math.abs(dy) > 4) dragState.dragged = true;
-      if (dragState.dragged) {
-        panel.style.left = (dragState.origLeft + dx) + "px";
-        panel.style.top = (dragState.origTop + dy) + "px";
-      }
-    });
-    document.addEventListener("mouseup", () => {
-      if (dragState && dragState.dragged) {
-        // Save drag position (clamp ensures panel stays within viewport)
-        panelPosition = clampPanelPosition(panel);
-        saveValue("panelPosition", panelPosition);
-      } else if (dragState && !dragState.dragged) {
-        panel.classList.toggle("collapsed");
-        togBtn.textContent = panel.classList.contains("collapsed") ? "+" : "\u2212";
-      }
-      dragState = null;
-    });
-
-    const body = el("div", { className: "lj-body" });
-
-    ui.scanBtn = el("button", {
-      className: "lj-scan-btn",
-      id: "lj-scan-btn",
-      textContent: "Scan Jobs",
-      onClick: () => { if (scanning) { scanAbort = true; } else { autoScanCards(); } }
-    });
-
-    // ---- Batch add (supports comma/newline-separated paste) ----
-    function batchAdd(raw, list, storageKey) {
-      const items = raw.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
-      let added = 0;
-      items.forEach(name => {
-        if (!list.some(c => c.toLowerCase() === name.toLowerCase())) {
-          list.push(name);
-          added++;
-        }
-      });
-      if (added > 0) {
-        saveValue(storageKey, list);
-        renderLists();
-        refilterAll();
-        if (added > 1) showToast("Added " + added + " items");
-      }
-    }
-
-    function copyList(list, label) {
-      navigator.clipboard.writeText(list.join(", ")).then(() => {
-        showToast("Copied " + list.length + " " + label);
-      }).catch(() => {
-        showToast("Copy failed — try again");
-      });
-    }
-
-    ui.companyList = el("div", { className: "lj-list" });
-    const companyInput = el("input", { type: "text", placeholder: "Company name..." });
-    const companyAddBtn = el("button", { textContent: "Add", onClick: () => {
-      const raw = companyInput.value.trim();
-      if (!raw) return;
-      batchAdd(raw, skippedCompanies, "skippedCompanies");
-      companyInput.value = "";
-    }});
-    companyInput.addEventListener("keypress", (e) => { if (e.key === "Enter") companyAddBtn.click(); });
-    const companyCopyBtn = el("button", {
-      className: "lj-copy-btn",
-      textContent: "Copy",
-      onClick: () => copyList(skippedCompanies, "companies")
-    });
-
-    const skipCurrentBtn = el("button", {
-      className: "lj-quick-skip-btn",
-      textContent: "Skip Current Company",
-      onClick: skipCurrentCompany
-    });
-
-    const companySection = el("div", { className: "lj-section" }, [
-      el("div", { className: "lj-label-row" }, [
-        el("span", { className: "lj-label", textContent: "Skipped Companies" }),
-        companyCopyBtn,
-      ]),
-      ui.companyList,
-      el("div", { className: "lj-add" }, [companyInput, companyAddBtn]),
-      el("div", { className: "lj-quick-skip" }, [skipCurrentBtn]),
-    ]);
-
-    ui.titleList = el("div", { className: "lj-list" });
-    const titleInput = el("input", { type: "text", placeholder: "Keyword..." });
-    const titleAddBtn = el("button", { textContent: "Add", onClick: () => {
-      const raw = titleInput.value.trim();
-      if (!raw) return;
-      batchAdd(raw, skippedTitleKeywords, "skippedTitleKeywords");
-      titleInput.value = "";
-    }});
-    titleInput.addEventListener("keypress", (e) => { if (e.key === "Enter") titleAddBtn.click(); });
-    const titleCopyBtn = el("button", {
-      className: "lj-copy-btn",
-      textContent: "Copy",
-      onClick: () => copyList(skippedTitleKeywords, "keywords")
-    });
-
-    const titleSection = el("div", { className: "lj-section" }, [
-      el("div", { className: "lj-label-row" }, [
-        el("span", { className: "lj-label", textContent: "Skipped Title Keywords" }),
-        titleCopyBtn,
-      ]),
-      ui.titleList,
-      el("div", { className: "lj-add" }, [titleInput, titleAddBtn]),
-    ]);
-
-    // ---- Sponsor detection toggle ----
-    function makeSwitch(label, checked, onChange) {
-      const input = el("input", { type: "checkbox" });
-      input.checked = checked;
-      input.addEventListener("change", () => onChange(input.checked));
-      const slider = el("span", { className: "slider" });
-      const lbl = el("label", { className: "lj-switch" }, [input, slider]);
-      return el("div", { className: "lj-switch-row" }, [
-        el("span", { textContent: label }), lbl
-      ]);
-    }
-
-    const sponsorSwitch = makeSwitch("Detect No Sponsor", sponsorCheckEnabled, (on) => {
-      sponsorCheckEnabled = on;
-      saveValue("sponsorCheckEnabled", on);
-    });
-
-    const unpaidSwitch = makeSwitch("Detect Unpaid", unpaidCheckEnabled, (on) => {
-      unpaidCheckEnabled = on;
-      saveValue("unpaidCheckEnabled", on);
-    });
-
-    // ---- Dim filtered cards toggle ----
-    function toggleDimCards(on) {
-      cardsDimmed = on;
-      document.querySelectorAll("[data-lj-filtered]").forEach(card => {
-        const vis = getVisibleEl(card);
-        if (on) vis.classList.add("lj-card-dimmed");
-        else vis.classList.remove("lj-card-dimmed");
-      });
-    }
-    const dimSwitch = makeSwitch("Dim filtered cards", false, toggleDimCards);
-
-    const switchSection = el("div", { className: "lj-section" }, [
-      el("div", { className: "lj-label", textContent: "Options" }),
-      sponsorSwitch,
-      unpaidSwitch,
-      dimSwitch,
-    ]);
-
-    const feedbackLink = el("a", {
-      className: "lj-feedback",
-      textContent: "Shape JobLens \u2192",
-      href: "https://kunli.co/joblens",
-      target: "_blank",
-    });
-
-    body.appendChild(companySection);
-    body.appendChild(titleSection);
-    body.appendChild(switchSection);
-    body.appendChild(ui.scanBtn);
-    body.appendChild(feedbackLink);
-    panel.appendChild(header);
-    panel.appendChild(body);
-    document.body.appendChild(panel);
-
-    // Restore last drag position (must be in DOM for getBoundingClientRect to work)
-    if (panelPosition) {
-      panel.style.left = panelPosition.left + "px";
-      panel.style.top = panelPosition.top + "px";
-      clampPanelPosition(panel);
-    }
-
-    // Listen for window resize (ensures panel stays visible on monitor switch/window resize)
-    let resizeTimer = null;
-    window.addEventListener("resize", () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        const p = document.getElementById("lj-filter-panel");
-        if (!p) return;
-        panelPosition = clampPanelPosition(p);
-        saveValue("panelPosition", panelPosition);
-      }, 150);
-    });
-
-    renderLists();
+  function updateBadgeCount() {
+    const badge = document.getElementById("lj-mini-badge");
+    if (!badge) return;
+    const count = labeledJobs ? labeledJobs.size : 0;
+    badge.textContent = count > 0 ? "\uD83D\uDD0D " + count + " flagged" : "\uD83D\uDD0D JobLens";
   }
 
+  function updateScanButton(text) {
+    const btn = document.getElementById("lj-mini-scan");
+    if (!btn) return;
+    btn.textContent = text || "Scan";
+  }
+
+  // ==================== Skip Current Company ====================
   function skipCurrentCompany() {
     const activeCard = getActiveCard();
     if (!activeCard) { showToast("No active job selected"); return; }
@@ -892,7 +652,6 @@
     }
     skippedCompanies.push(name);
     saveValue("skippedCompanies", skippedCompanies);
-    renderLists();
     refilterAll();
     showToast("Skipped: " + name);
   }
@@ -903,90 +662,6 @@
       if (isSkippedCompany(card)) labelCard(card, "skippedCompany");
       if (isSkippedTitle(card)) labelCard(card, "skippedTitle");
     });
-  }
-
-  // ==================== Render Skip Lists ====================
-  function renderLists() {
-    renderList(ui.companyList, skippedCompanies, "company");
-    renderList(ui.titleList, skippedTitleKeywords, "title");
-  }
-
-  const LIST_COLLAPSE_LIMIT = 5;
-
-  function renderList(container, items, type) {
-    if (!container) return;
-    while (container.firstChild) container.removeChild(container.firstChild);
-
-    if (items.length === 0) {
-      const hint = type === "company" ? "Add a company to start skipping" : "Add a keyword to filter titles";
-      container.appendChild(el("div", { className: "lj-empty", textContent: hint }));
-      return;
-    }
-
-    const expanded = container._ljExpanded || false;
-    const showAll = expanded || items.length <= LIST_COLLAPSE_LIMIT;
-    const visible = showAll ? items : items.slice(0, LIST_COLLAPSE_LIMIT);
-
-    visible.forEach((name, i) => {
-      const removeBtn = el("button", {
-        className: "lj-x",
-        textContent: "\u00d7",
-        onClick: (e) => {
-          e.stopPropagation();
-          removeFromList(type, i);
-        }
-      });
-      const item = el("div", { className: "lj-item" }, [
-        el("span", { textContent: name }),
-        removeBtn
-      ]);
-      container.appendChild(item);
-    });
-
-    if (items.length > LIST_COLLAPSE_LIMIT) {
-      const hidden = items.length - LIST_COLLAPSE_LIMIT;
-      const toggleBtn = el("button", {
-        className: "lj-list-toggle",
-        textContent: expanded ? "Show less" : "+" + hidden + " more...",
-        onClick: () => {
-          container._ljExpanded = !expanded;
-          renderList(container, items, type);
-        }
-      });
-      container.appendChild(toggleBtn);
-    }
-  }
-
-  function removeFromList(type, index) {
-    const list = type === "company" ? skippedCompanies : skippedTitleKeywords;
-    const key = type === "company" ? "skippedCompanies" : "skippedTitleKeywords";
-    const reason = type === "company" ? "skippedCompany" : "skippedTitle";
-    list.splice(index, 1);
-    saveValue(key, list);
-    renderLists();
-
-    // Remove this reason from multi-label cards
-    document.querySelectorAll("[data-lj-reasons]").forEach((card) => {
-      const reasons = card.dataset.ljReasons.split(",");
-      const idx = reasons.indexOf(reason);
-      if (idx === -1) return;
-      reasons.splice(idx, 1);
-      // Sync cleanup of memory Map
-      const jobKey = getJobKey(card);
-      if (jobKey && labeledJobs.has(jobKey)) labeledJobs.get(jobKey).delete(reason);
-      if (reasons.length === 0) {
-        delete card.dataset.ljReasons;
-        delete card.dataset.ljFiltered;
-        if (jobKey) labeledJobs.delete(jobKey);
-        clearBadges(card);
-      } else {
-        card.dataset.ljReasons = reasons.join(",");
-        card.dataset.ljFiltered = getBorderReason(reasons);
-        applyBadges(card);
-      }
-      processedCards.delete(card);
-    });
-    filterJobCards();
   }
 
   // ==================== Auto-Scan ====================
@@ -1032,14 +707,14 @@
       const cards = getJobCards();
       const toScan = cards.filter(c => !scannedCards.has(c) && !c.dataset.ljReasons);
       const total = toScan.length;
-      updateScanButton("Scanning 0/" + total + "...", 0);
+      updateScanButton("0/" + total + "...");
 
       for (let i = 0; i < toScan.length; i++) {
         if (scanAbort) break;
         const card = toScan[i];
         if (card.dataset.ljReasons) continue;
 
-        updateScanButton("Scanning " + (i + 1) + "/" + total + "...", ((i + 1) / total) * 100);
+        updateScanButton((i + 1) + "/" + total + "...");
 
         const oldFp = getDetailFingerprint();
         clickCard(card);
@@ -1055,6 +730,8 @@
           await sleep(SCAN_DELAY_MS);
         }
       }
+
+      incrementStat("jobsScanned", total);
     } catch (err) {
       console.error("[JobLens] Scan error:", err);
       showToast("Scan error: " + err.message);
@@ -1068,55 +745,57 @@
     setTimeout(refreshBadges, 2000);
 
     const flagged = getJobCards().filter(c => c.dataset.ljReasons).length;
-    showScanDone(flagged);
+    const doneText = flagged === 0 ? "All clear" : flagged + " flagged";
+    updateScanButton(doneText);
+    updateBadgeCount();
+    showToast("Scan complete \u2014 " + doneText);
   }
 
-  function updateScanButton(text, progress) {
-    const btn = ui.scanBtn;
-    if (!btn) return;
-    btn.classList.remove("scan-done");
-    if (scanning && !scanAbort) {
-      btn.textContent = text || "Stop Scan";
-      btn.classList.add("scanning");
-      // Progress bar
-      let bar = btn.querySelector(".lj-scan-progress");
-      if (!bar) {
-        bar = document.createElement("div");
-        bar.className = "lj-scan-progress";
-        btn.appendChild(bar);
-      }
-      bar.style.width = (progress || 0) + "%";
-    } else {
-      btn.textContent = "Scan Jobs";
-      btn.classList.remove("scanning");
-      const bar = btn.querySelector(".lj-scan-progress");
-      if (bar) bar.remove();
-    }
-  }
-
-  function showScanDone(flagged) {
-    const btn = ui.scanBtn;
-    if (!btn) return;
-    btn.classList.remove("scanning");
-    btn.classList.add("scan-done");
-    const bar = btn.querySelector(".lj-scan-progress");
-    if (bar) bar.remove();
-    btn.textContent = flagged === 0
-      ? "Scan complete \u2014 all clear"
-      : "Scan complete \u2014 " + flagged + " flagged";
-  }
+  // ==================== Storage Change Listener ====================
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    // Re-read settings
+    chrome.storage.local.get({
+      skippedCompanies: [], skippedTitleKeywords: [],
+      sponsorCheckEnabled: true, unpaidCheckEnabled: true, dimFiltered: true
+    }, (data) => {
+      skippedCompanies = data.skippedCompanies;
+      skippedTitleKeywords = data.skippedTitleKeywords;
+      sponsorCheckEnabled = data.sponsorCheckEnabled;
+      unpaidCheckEnabled = data.unpaidCheckEnabled;
+      // Re-apply dim mode
+      cardsDimmed = data.dimFiltered;
+      document.body.classList.toggle("lj-dim-filtered", data.dimFiltered);
+      // Re-apply dim to individual cards
+      document.querySelectorAll("[data-lj-filtered]").forEach(card => {
+        const vis = getVisibleEl(card);
+        if (data.dimFiltered) vis.classList.add("lj-card-dimmed");
+        else vis.classList.remove("lj-card-dimmed");
+      });
+      filterJobCards();
+    });
+  });
 
   // ==================== Initialization ====================
   async function init() {
     if (!isSearchPage()) return;
     await loadSettings();
-    createUI();
+    injectStyles();
+    createMiniBadge();
     filterJobCards();
     checkDetailPanel();
 
+    // Apply dim mode on init
+    if (cardsDimmed) {
+      document.querySelectorAll("[data-lj-filtered]").forEach(card => {
+        const vis = getVisibleEl(card);
+        vis.classList.add("lj-card-dimmed");
+      });
+    }
+
     // First-use hint
     if (!hasSeenIntro) {
-      showToast("Click Scan Jobs to filter all visible listings");
+      showToast("Click Scan to filter all visible listings");
       hasSeenIntro = true;
       saveValue("hasSeenIntro", true);
     }
@@ -1127,19 +806,6 @@
   } else {
     window.addEventListener("load", () => setTimeout(init, 1500));
   }
-
-  // ==================== Keyboard Shortcut (Ctrl/Cmd + Shift + J) ====================
-  document.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "J" || e.key === "j")) {
-      e.preventDefault();
-      const panel = document.getElementById("lj-filter-panel");
-      if (panel) {
-        panel.classList.toggle("collapsed");
-        const togBtn = panel.querySelector(".lj-toggle");
-        if (togBtn) togBtn.textContent = panel.classList.contains("collapsed") ? "+" : "\u2212";
-      }
-    }
-  });
 
   // ==================== SPA Route Detection (lightweight, no MutationObserver on body) ====================
   let lastUrl = location.href;
@@ -1156,15 +822,15 @@
       scanAbort = false;
       lastDetailText = "";
       setTimeout(() => {
-        if (!document.getElementById("lj-filter-panel")) init();
+        if (!document.getElementById("lj-mini-container")) init();
         else filterJobCards();
         // Re-attach the narrowed observer for the new page
         attachJobsObserver();
       }, 2000);
     } else if (!onSearch) {
-      // Left search page → remove panel
-      const panel = document.getElementById("lj-filter-panel");
-      if (panel) panel.remove();
+      // Left search page → remove mini badge
+      const container = document.getElementById("lj-mini-container");
+      if (container) container.remove();
     }
   }
 

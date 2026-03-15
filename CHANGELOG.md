@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.4
+
+### New: Extension Popup Control Center
+- Centralized popup with 3 tabs: Controls, Stats, Data
+- **Controls tab**: All toggles grouped by page (Feed / Jobs / Profile), mute lists, skip lists — full editing
+- **Stats tab**: Real-time counters (ads hidden, posts muted, jobs flagged, etc.) with Today + All Time views
+- **Data tab**: Export all settings as JSON backup, import to restore, reset to defaults
+- Settings sync via `chrome.storage.onChanged` — changes in popup apply to pages instantly, no reload needed
+
+### Architecture Change
+- Page floating panels replaced with **mini status badges** (bottom-right corner)
+- Feed badge: shows "🔍 N filtered" count
+- Jobs badge: shows "🔍 N flagged" count with inline Scan button
+- Profile badge: shows "🔍 Sidebar hidden" status
+- Mute buttons and Scan button remain on-page (require DOM context)
+
+---
+
 ## v1.3
 
 ### UX
