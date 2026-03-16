@@ -300,6 +300,41 @@
     else if (msg.action === "muteKeyword") addMutedKeyword(msg.text);
   });
 
+  // === Keyboard shortcut: Shift+J to pause/resume feed filters ===
+  let feedPaused = false;
+
+  function toggleFeedPause() {
+    feedPaused = !feedPaused;
+    if (feedPaused) {
+      feedDoc.body.classList.remove(
+        "lj-hide-promoted", "lj-hide-suggested",
+        "lj-hide-recommended", "lj-hide-non-connections", "lj-hide-sidebar"
+      );
+      // Un-mute all posts temporarily
+      for (const el of feedDoc.querySelectorAll('[data-lj-muted="true"]')) {
+        el.dataset.ljMuted = "paused";
+      }
+      showToast("Filters paused (Shift+J to resume)");
+    } else {
+      applyBodyClasses();
+      for (const el of feedDoc.querySelectorAll('[data-lj-muted="paused"]')) {
+        el.dataset.ljMuted = "true";
+      }
+      scanPosts();
+      showToast("Filters resumed");
+    }
+  }
+
+  feedDoc.addEventListener("keydown", (e) => {
+    if (e.key === "J" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // Don't trigger when typing in inputs
+      const tag = (e.target.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || e.target.isContentEditable) return;
+      e.preventDefault();
+      toggleFeedPause();
+    }
+  });
+
   // === Toast notification (with optional undo action) ===
   let toastTimer = null;
 
