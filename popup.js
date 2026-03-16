@@ -17,7 +17,6 @@
     dimFiltered: false,
     skippedCompanies: [],
     skippedTitleKeywords: [],
-    hideProfileSidebar: true,
   };
 
   const STATS_DEFAULTS = {
@@ -372,19 +371,6 @@
 
     container.appendChild(jobsGroup);
 
-    // --- Profile Section ---
-    var profileGroup = document.createElement("div");
-    profileGroup.className = "section-group";
-    var profileTitle = document.createElement("div");
-    profileTitle.className = "section-title";
-    profileTitle.textContent = "Profile";
-    profileGroup.appendChild(profileTitle);
-
-    profileGroup.appendChild(createToggle("Hide Sidebar", settings.hideProfileSidebar, function (v) {
-      chrome.storage.local.set({ hideProfileSidebar: v });
-    }));
-
-    container.appendChild(profileGroup);
   }
 
   // === Stats Tab ===
