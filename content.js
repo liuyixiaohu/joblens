@@ -64,6 +64,7 @@
   let scanning = false;
   let scanAbort = false;
   let cardsDimmed = false;
+  let cardsHidden = false;
   const SCAN_DELAY_MS = 1500;
 
   // UI element references (set in createUI)
@@ -86,6 +87,7 @@
       hasSeenIntro: false,
       panelPosition: null,
       dimFiltered: false,
+      hideFiltered: false,
     });
     skippedCompanies = data.skippedCompanies;
     skippedTitleKeywords = data.skippedTitleKeywords;
@@ -94,6 +96,7 @@
     hasSeenIntro = data.hasSeenIntro;
     panelPosition = data.panelPosition;
     cardsDimmed = data.dimFiltered;
+    cardsHidden = data.hideFiltered;
   }
 
   function saveValue(key, value) {
@@ -428,8 +431,9 @@
 
     badgeTarget.appendChild(container);
 
-    // Auto-dim newly labeled cards when dim mode is enabled
-    if (cardsDimmed) target.classList.add("lj-card-dimmed");
+    // Auto-dim or hide newly labeled cards
+    if (cardsHidden) target.classList.add("lj-card-hidden");
+    else if (cardsDimmed) target.classList.add("lj-card-dimmed");
   }
 
   // Check all labeled cards and restore missing badges
@@ -678,8 +682,9 @@
       ".lj-switch .slider::before{content:'';position:absolute;width:16px;height:16px;left:2px;top:2px;background:#fff;border-radius:50%;transition:transform 0.2s}",
       ".lj-switch input:checked+.slider{background:#5a8a6e}",
       ".lj-switch input:checked+.slider::before{transform:translateX(16px)}",
-      // Dimmed card styles
+      // Dimmed / hidden card styles
       ".lj-card-dimmed{opacity:0.35 !important;transition:opacity 0.2s}",
+      ".lj-card-hidden{display:none !important}",
       ".lj-card-dimmed:hover{opacity:0.7 !important}",
       // Card border (brand rose)
       "[data-lj-filtered]{border-left:3px solid #D9797B !important;position:relative !important;overflow:visible !important}",
@@ -870,7 +875,7 @@
       saveValue("unpaidCheckEnabled", on);
     });
 
-    // ---- Dim filtered cards toggle ----
+    // ---- Dim / Hide filtered cards toggles ----
     function toggleDimCards(on) {
       cardsDimmed = on;
       document.querySelectorAll("[data-lj-filtered]").forEach(card => {
@@ -879,13 +884,25 @@
         else vis.classList.remove("lj-card-dimmed");
       });
     }
-    const dimSwitch = makeSwitch("Dim filtered cards", false, toggleDimCards);
+    const dimSwitch = makeSwitch("Dim filtered cards", cardsDimmed, toggleDimCards);
+
+    function toggleHideCards(on) {
+      cardsHidden = on;
+      saveValue("hideFiltered", on);
+      document.querySelectorAll("[data-lj-filtered]").forEach(card => {
+        const vis = getVisibleEl(card);
+        if (on) { vis.classList.add("lj-card-hidden"); vis.classList.remove("lj-card-dimmed"); }
+        else { vis.classList.remove("lj-card-hidden"); if (cardsDimmed) vis.classList.add("lj-card-dimmed"); }
+      });
+    }
+    const hideSwitch = makeSwitch("Hide filtered cards", cardsHidden, toggleHideCards);
 
     const switchSection = el("div", { className: "lj-section" }, [
       el("div", { className: "lj-label", textContent: "Options" }),
       sponsorSwitch,
       unpaidSwitch,
       dimSwitch,
+      hideSwitch,
     ]);
 
     const feedbackLink = el("a", {
@@ -1300,19 +1317,21 @@
     if (area !== "local") return;
     // Only react to actual setting keys, never to stats writes
     const settingKeys = ["skippedCompanies", "skippedTitleKeywords",
-      "sponsorCheckEnabled", "unpaidCheckEnabled", "dimFiltered"];
+      "sponsorCheckEnabled", "unpaidCheckEnabled", "dimFiltered", "hideFiltered"];
     const hasSettingChange = settingKeys.some(k => k in changes);
     if (!hasSettingChange) return;
 
     chrome.storage.local.get({
       skippedCompanies: [], skippedTitleKeywords: [],
-      sponsorCheckEnabled: true, unpaidCheckEnabled: true, dimFiltered: false,
+      sponsorCheckEnabled: true, unpaidCheckEnabled: true,
+      dimFiltered: false, hideFiltered: false,
     }, (data) => {
       skippedCompanies = data.skippedCompanies;
       skippedTitleKeywords = data.skippedTitleKeywords;
       sponsorCheckEnabled = data.sponsorCheckEnabled;
       unpaidCheckEnabled = data.unpaidCheckEnabled;
       cardsDimmed = data.dimFiltered;
+      cardsHidden = data.hideFiltered;
       renderLists();
       processedCards = new WeakSet();  // reset so all cards get re-evaluated with new settings
       filterJobCards();
