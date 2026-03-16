@@ -8,7 +8,8 @@
     {
       "matches": ["https://www.linkedin.com/*"],
       "css": ["feed.css"],
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "all_frames": true
     },
     {
       "matches": ["https://www.linkedin.com/*"],
