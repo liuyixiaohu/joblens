@@ -67,6 +67,8 @@ body.lj-hide-non-connections [data-lj-non-connection="true"],
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%) translateY(20px);
+  display: flex;
+  align-items: center;
   background: #1F2328;
   color: #FAF7F2;
   padding: 8px 20px;
@@ -81,7 +83,27 @@ body.lj-hide-non-connections [data-lj-non-connection="true"],
 
 #lj-feed-toast.visible {
   opacity: 1;
+  pointer-events: auto;
   transform: translateX(-50%) translateY(0);
+}
+
+/* Undo button inside toast */
+#lj-toast-undo {
+  background: none;
+  border: 1px solid rgba(250, 247, 242, 0.5);
+  color: #FAF7F2;
+  cursor: pointer;
+  font-family: 'EB Garamond', Garamond, serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 4px;
+  margin-left: 10px;
+  transition: background 0.2s;
+}
+
+#lj-toast-undo:hover {
+  background: rgba(250, 247, 242, 0.15);
 }
 
 /* === Mini status badge === */

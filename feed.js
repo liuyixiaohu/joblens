@@ -258,7 +258,7 @@
     rebuildMuteCache();
     scanPosts();
     nudgeScroll();
-    showToast("Muted " + name);
+    showToast("Muted " + name, () => removeMutedPerson(name));
   }
 
   function removeMutedPerson(name) {
@@ -293,17 +293,32 @@
     scanPosts();
   }
 
-  // === Toast notification ===
-  function showToast(msg) {
+  // === Toast notification (with optional undo action) ===
+  let toastTimer = null;
+
+  function showToast(msg, onUndo) {
     let toast = feedDoc.getElementById("lj-feed-toast");
     if (!toast) {
       toast = feedDoc.createElement("div");
       toast.id = "lj-feed-toast";
       feedDoc.body.appendChild(toast);
     }
-    toast.textContent = msg;
+    clearTimeout(toastTimer);
+    toast.innerHTML = "";
+    toast.appendChild(feedDoc.createTextNode(msg));
+    if (onUndo) {
+      const btn = feedDoc.createElement("button");
+      btn.id = "lj-toast-undo";
+      btn.textContent = "Undo";
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onUndo();
+        toast.classList.remove("visible");
+      });
+      toast.appendChild(btn);
+    }
     toast.classList.add("visible");
-    setTimeout(() => toast.classList.remove("visible"), 1800);
+    toastTimer = setTimeout(() => toast.classList.remove("visible"), onUndo ? 5000 : 1800);
   }
 
   // === Mini status badge (clickable with breakdown) ===
