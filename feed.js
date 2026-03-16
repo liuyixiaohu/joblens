@@ -2,6 +2,10 @@
 (function () {
   "use strict";
 
+  // After extension reload/update, old content scripts lose chrome API access.
+  // Bail out silently to avoid "Cannot read properties of undefined" errors.
+  if (!chrome.runtime?.id) return;
+
   function isFeedPage() {
     const p = location.pathname;
     return p === "/" || p.startsWith("/feed");
