@@ -582,7 +582,7 @@
   // SPA navigation detector — URL polling because LinkedIn intercepts
   // pushState/popstate and doesn't fire standard navigation events.
   let lastUrl = location.href;
-  setInterval(() => {
+  const urlPollInterval = setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
       if (isFeedPage()) {
