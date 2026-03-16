@@ -9,6 +9,25 @@
 
   let initialized = false;
 
+  // === Iframe-aware document access ===
+  // LinkedIn SPA navigation may render feed inside a same-origin iframe.
+  // Content scripts only run in the top frame, so we reach into the iframe.
+  let feedDoc = document;
+
+  function findFeedDoc() {
+    for (const iframe of document.querySelectorAll("iframe")) {
+      if (iframe.offsetWidth < 500) continue;
+      try {
+        const doc = iframe.contentDocument;
+        if (doc && doc.body) {
+          feedDoc = doc;
+          return;
+        }
+      } catch (e) {}
+    }
+    feedDoc = document;
+  }
+
   // === Storage ===
   const DEFAULTS = {
     hidePromoted: true,
@@ -125,9 +144,14 @@
     });
   }
 
+  // Helper: find the <main> element in the active feed document
+  function feedMain() {
+    return feedDoc.querySelector('main[role="main"]') || feedDoc.querySelector("main");
+  }
+
   // Scan and tag all posts
   function scanPosts() {
-    const main = document.querySelector('main[role="main"]') || document.querySelector("main");
+    const main = feedMain();
     if (!main) return;
     const articles = main.querySelectorAll('[role="article"]');
     for (const article of articles) {
@@ -170,14 +194,14 @@
 
   function switchToRecent() {
     // Open the sort dropdown, then click "Recent"
-    const svg = document.querySelector('[aria-label="Sort order dropdown button"]');
+    const svg = feedDoc.querySelector('[aria-label="Sort order dropdown button"]');
     const sortBtn = svg && svg.closest("button");
     if (!sortBtn) return;
     // Already on Recent? Skip
     if (sortBtn.textContent.replace(/\s+/g, " ").includes("Recent")) return;
     sortBtn.click();
     setTimeout(() => {
-      const items = document.querySelectorAll(".artdeco-dropdown__item");
+      const items = feedDoc.querySelectorAll(".artdeco-dropdown__item");
       for (const item of items) {
         if (item.textContent.trim() === "Recent") { item.click(); break; }
       }
@@ -187,7 +211,7 @@
   // === Mute button injection on posts ===
 
   function makeMuteBtn(name) {
-    const btn = document.createElement("button");
+    const btn = feedDoc.createElement("button");
     btn.className = "lj-mute-btn";
     btn.title = "Mute " + name;
     btn.textContent = "Mute";
@@ -200,7 +224,7 @@
   }
 
   function injectMuteButtons() {
-    const main = document.querySelector('main[role="main"]') || document.querySelector("main");
+    const main = feedMain();
     if (!main) return;
     const articles = main.querySelectorAll('[role="article"]');
     for (const article of articles) {
@@ -277,11 +301,11 @@
 
   // === Toast notification ===
   function showToast(msg) {
-    let toast = document.getElementById("lj-feed-toast");
+    let toast = feedDoc.getElementById("lj-feed-toast");
     if (!toast) {
-      toast = document.createElement("div");
+      toast = feedDoc.createElement("div");
       toast.id = "lj-feed-toast";
-      document.body.appendChild(toast);
+      feedDoc.body.appendChild(toast);
     }
     toast.textContent = msg;
     toast.classList.add("visible");
@@ -290,18 +314,27 @@
 
   // === Mini status badge ===
   function createMiniBadge() {
-    const badge = document.createElement("div");
+    if (feedDoc.getElementById("lj-mini-badge")) return;
+    const badge = feedDoc.createElement("div");
     badge.id = "lj-mini-badge";
-    document.body.appendChild(badge);
+    feedDoc.body.appendChild(badge);
     updateBadgeCount();
   }
 
   function updateBadgeCount() {
-    const badge = document.getElementById("lj-mini-badge");
+    const badge = feedDoc.getElementById("lj-mini-badge");
     if (!badge) return;
-    const count = document.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-muted="true"]').length;
+    const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-muted="true"]').length;
     badge.textContent = count > 0 ? "\uD83D\uDD0D " + count + " filtered" : "\uD83D\uDD0D JobLens";
-    badge.style.display = count > 0 ? "" : "";
+  }
+
+  // === Apply body classes to the feed document ===
+  function applyBodyClasses() {
+    feedDoc.body.classList.toggle("lj-hide-promoted", settings.hidePromoted);
+    feedDoc.body.classList.toggle("lj-hide-suggested", settings.hideSuggested);
+    feedDoc.body.classList.toggle("lj-hide-recommended", settings.hideRecommended);
+    feedDoc.body.classList.toggle("lj-hide-non-connections", settings.hideNonConnections);
+    feedDoc.body.classList.toggle("lj-hide-sidebar", settings.hideSidebar);
   }
 
   // === Listen for settings changes from Popup ===
@@ -309,11 +342,7 @@
     if (area !== "local") return;
     // Re-read all settings and re-apply
     loadSettings((s) => {
-      document.body.classList.toggle("lj-hide-promoted", s.hidePromoted);
-      document.body.classList.toggle("lj-hide-suggested", s.hideSuggested);
-      document.body.classList.toggle("lj-hide-recommended", s.hideRecommended);
-      document.body.classList.toggle("lj-hide-non-connections", s.hideNonConnections);
-      document.body.classList.toggle("lj-hide-sidebar", s.hideSidebar);
+      applyBodyClasses();
       if (s.hideSidebar) enforceSidebarHidden();
       rebuildMuteCache();
       scanPosts();
@@ -334,7 +363,7 @@
   function hideSidebarElements() {
     let hidden = 0;
     SIDEBAR_SELECTORS.forEach(sel => {
-      document.querySelectorAll(sel).forEach(node => {
+      feedDoc.querySelectorAll(sel).forEach(node => {
         if (node.style.display !== "none") {
           node.style.display = "none";
           hidden++;
@@ -358,6 +387,70 @@
     }, 2000);
   }
 
+  // === Inject inline <style> into feedDoc for sidebar hiding ===
+  function injectSidebarStyle() {
+    if (!feedDoc.getElementById("lj-sidebar-style")) {
+      const s = feedDoc.createElement("style");
+      s.id = "lj-sidebar-style";
+      s.textContent = SIDEBAR_SELECTORS.map(sel => sel + "{display:none!important}").join("\n");
+      feedDoc.head.appendChild(s);
+    }
+  }
+
+  // === Inject feed.css into iframe (it won't have extension CSS) ===
+  function injectFeedCssIntoIframe() {
+    if (feedDoc === document) return; // not in iframe
+    if (feedDoc.getElementById("lj-feed-css")) return; // already injected
+    // Copy all feed.css rules from the top frame's extension stylesheet
+    for (const sheet of document.styleSheets) {
+      try {
+        if (!sheet.href || !sheet.href.includes("feed.css")) continue;
+        const rules = [...sheet.cssRules].map(r => r.cssText).join("\n");
+        const style = feedDoc.createElement("style");
+        style.id = "lj-feed-css";
+        style.textContent = rules;
+        feedDoc.head.appendChild(style);
+        return;
+      } catch (e) {}
+    }
+  }
+
+  // === Set up MutationObserver on the feed's <main> element ===
+  let feedObserver = null;
+
+  function setupObserver() {
+    // Disconnect previous observer if any
+    if (feedObserver) feedObserver.disconnect();
+
+    const mainEl = feedMain();
+    let debounceTimer = null;
+    feedObserver = new MutationObserver(() => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        scanPosts();
+        injectMuteButtons();
+        updateBadgeCount();
+        nudgeScroll();
+      }, 300);
+    });
+
+    if (mainEl) {
+      feedObserver.observe(mainEl, { childList: true, subtree: true });
+    } else {
+      // Fallback: wait for main to appear, then observe it
+      const target = feedDoc === document ? document.body : feedDoc.body;
+      if (!target) return;
+      const bodyObs = new MutationObserver(() => {
+        const m = feedMain();
+        if (m) {
+          bodyObs.disconnect();
+          feedObserver.observe(m, { childList: true, subtree: true });
+        }
+      });
+      bodyObs.observe(target, { childList: true, subtree: true });
+    }
+  }
+
   // === Init ===
   function boot() {
     if (initialized || !isFeedPage()) return;
@@ -367,22 +460,18 @@
       // Build mute lookup caches
       rebuildMuteCache();
 
-      // Apply saved toggle states
-      if (settings.hidePromoted) document.body.classList.add("lj-hide-promoted");
-      if (settings.hideSuggested) document.body.classList.add("lj-hide-suggested");
-      if (settings.hideRecommended) document.body.classList.add("lj-hide-recommended");
-      if (settings.hideNonConnections) document.body.classList.add("lj-hide-non-connections");
-      if (settings.hideSidebar) document.body.classList.add("lj-hide-sidebar");
+      // Find the active feed document (top frame or iframe)
+      findFeedDoc();
 
-      // Actively hide sidebar elements via JS (CSS class alone may not survive SPA navigation)
-      // Also inject inline <style> as backup in case external CSS didn't survive SPA nav
+      // If feed is in an iframe, inject our CSS into it
+      injectFeedCssIntoIframe();
+
+      // Apply saved toggle states
+      applyBodyClasses();
+
+      // Sidebar hiding: inline style + JS enforcement
       if (settings.hideSidebar) {
-        if (!document.getElementById("lj-sidebar-style")) {
-          const s = document.createElement("style");
-          s.id = "lj-sidebar-style";
-          s.textContent = SIDEBAR_SELECTORS.map(sel => sel + "{display:none!important}").join("\n");
-          document.head.appendChild(s);
-        }
+        injectSidebarStyle();
         enforceSidebarHidden();
       }
 
@@ -396,37 +485,48 @@
       // Switch to Recent sort if enabled
       if (settings.forceRecent) switchToRecent();
 
-      // Observe only <main> for new posts (infinite scroll)
-      // Narrower scope avoids self-triggered loops from panel/toast DOM changes
-      const mainEl = document.querySelector('main[role="main"]') || document.querySelector("main");
-      let debounceTimer = null;
-      const observer = new MutationObserver(() => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-          scanPosts();
-          injectMuteButtons();
-          updateBadgeCount();
-          nudgeScroll();
-        }, 300);
-      });
-      if (mainEl) {
-        observer.observe(mainEl, { childList: true, subtree: true });
-      } else {
-        // Fallback: wait for main to appear, then observe it
-        const bodyObs = new MutationObserver(() => {
-          const m = document.querySelector('main[role="main"]') || document.querySelector("main");
-          if (m) {
-            bodyObs.disconnect();
-            observer.observe(m, { childList: true, subtree: true });
-          }
-        });
-        bodyObs.observe(document.body, { childList: true, subtree: true });
-      }
+      // Observe feed's <main> for new posts (infinite scroll)
+      setupObserver();
     });
+  }
+
+  // === Periodic iframe detection ===
+  // After SPA navigation, the iframe may take a moment to load content.
+  // This polls for iframe content and re-applies features when found.
+  let iframeCheckInterval = null;
+
+  function startIframeCheck() {
+    if (iframeCheckInterval) clearInterval(iframeCheckInterval);
+    let ticks = 0;
+    iframeCheckInterval = setInterval(() => {
+      const prevDoc = feedDoc;
+      findFeedDoc();
+      if (feedDoc !== prevDoc) {
+        // Iframe appeared or changed — re-apply everything
+        injectFeedCssIntoIframe();
+        applyBodyClasses();
+        if (settings.hideSidebar) {
+          injectSidebarStyle();
+          enforceSidebarHidden();
+        }
+        scanPosts();
+        injectMuteButtons();
+        createMiniBadge();
+        updateBadgeCount();
+        setupObserver();
+        if (settings.forceRecent) switchToRecent();
+        clearInterval(iframeCheckInterval);
+      }
+      ticks++;
+      if (ticks >= 10) clearInterval(iframeCheckInterval); // stop after 10s
+    }, 1000);
   }
 
   // Boot immediately if on feed page, otherwise poll for SPA navigation
   boot();
+  // After initial boot, also check for iframe (content may not be ready yet)
+  if (initialized) startIframeCheck();
+
   let lastUrl = location.href;
   setInterval(() => {
     if (location.href !== lastUrl) {
@@ -434,17 +534,25 @@
       if (isFeedPage()) {
         if (!initialized) {
           boot();
+          startIframeCheck();
         } else {
-          // Already initialized but navigated back to feed — re-enforce sidebar
+          // Already initialized but navigated back to feed — re-apply
+          findFeedDoc();
+          injectFeedCssIntoIframe();
+          applyBodyClasses();
           if (settings.hideSidebar) {
-            document.body.classList.add("lj-hide-sidebar");
+            injectSidebarStyle();
             enforceSidebarHidden();
           }
+          startIframeCheck();
         }
       } else {
         // Left the feed page — reset so boot() runs again when returning
         initialized = false;
+        feedDoc = document;
         if (sidebarInterval) clearInterval(sidebarInterval);
+        if (iframeCheckInterval) clearInterval(iframeCheckInterval);
+        if (feedObserver) feedObserver.disconnect();
       }
     }
   }, 1000);
