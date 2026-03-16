@@ -1,4 +1,4 @@
-// JobLens Feed: hide ads, sidebar, muted people & keywords
+// JobLens Feed: filter posts, hide sidebar, mute people/keywords, SPA/iframe-aware
 (function () {
   "use strict";
 
@@ -9,20 +9,18 @@
 
   let initialized = false;
 
-  // === Iframe-aware document access ===
-  // LinkedIn SPA navigation may render feed inside a same-origin iframe.
-  // Content scripts only run in the top frame, so we reach into the iframe.
+  // LinkedIn SPA navigation may render the feed inside a same-origin iframe.
+  // Content scripts only run in the top frame, so we detect the iframe and
+  // redirect all DOM queries to the correct document via `feedDoc`.
   let feedDoc = document;
+  const MIN_FEED_IFRAME_WIDTH = 500;
 
-  function findFeedDoc() {
+  function updateFeedDoc() {
     for (const iframe of document.querySelectorAll("iframe")) {
-      if (iframe.offsetWidth < 500) continue;
+      if (iframe.offsetWidth < MIN_FEED_IFRAME_WIDTH) continue;
       try {
         const doc = iframe.contentDocument;
-        if (doc && doc.body) {
-          feedDoc = doc;
-          return;
-        }
+        if (doc && doc.body) { feedDoc = doc; return; }
       } catch (e) {}
     }
     feedDoc = document;
@@ -39,6 +37,7 @@
     mutedPeople: [],
     mutedKeywords: [],
   };
+  const SETTING_KEYS = new Set(Object.keys(DEFAULTS));
   let settings = { ...DEFAULTS };
 
   function loadSettings(cb) {
@@ -62,12 +61,11 @@
     return match ? match[1].trim() : null;
   }
 
-  // Interaction person: from header text like "Jane likes this" / "John commented on this"
+  // Interaction person: "Jane likes this" / "John commented on this"
   function getInteractor(article) {
     const header = article.querySelector(".update-components-header");
     if (!header) return null;
     const text = header.textContent.trim();
-    // Patterns: "Name likes this", "Name commented on this", "Name reposted this", "Name loves this"
     const match = text.match(/^(.+?)\s+(likes?|commented|reposted|loves?|celebrates?|supports?|finds? funny)\b/i);
     return match ? match[1].trim() : null;
   }
@@ -79,12 +77,11 @@
     nudgeTimer = setTimeout(() => {
       window.scrollBy(0, 1);
       requestAnimationFrame(() => window.scrollBy(0, -1));
-    }, 400);            // wait for collapse animation to finish
+    }, 400);
   }
 
   // === Filtering logic ===
 
-  // Cached lowercase Sets for O(1) mute lookups (rebuilt when lists change)
   let mutedPeopleSet = new Set();
   let mutedKeywordsLower = [];
 
@@ -93,7 +90,6 @@
     mutedKeywordsLower = settings.mutedKeywords.map((k) => k.toLowerCase());
   }
 
-  // Single-pass leaf text detection: one querySelectorAll("*") instead of 5
   const POST_TYPE_LABELS = new Set([
     "Promoted", "Suggested", "Recommended for you",
     "Jobs recommended for you", "Popular course on LinkedIn Learning",
@@ -113,49 +109,61 @@
     if (mutedPeopleSet.size === 0) return false;
     const author = getPostAuthor(article);
     const interactor = getInteractor(article);
-    if (author && mutedPeopleSet.has(author.toLowerCase())) return true;
-    if (interactor && mutedPeopleSet.has(interactor.toLowerCase())) return true;
-    return false;
+    return (author && mutedPeopleSet.has(author.toLowerCase())) ||
+           (interactor && mutedPeopleSet.has(interactor.toLowerCase())) || false;
   }
 
-  // WeakMap cache for lowercase innerText (posts don't change content between scans)
+  // textContent avoids layout reflow (unlike innerText). Cache may go stale
+  // if LinkedIn expands "see more" — acceptable tradeoff for scan perf.
   const articleTextCache = new WeakMap();
 
   function isMutedByKeyword(article) {
     if (mutedKeywordsLower.length === 0) return false;
     let text = articleTextCache.get(article);
     if (text === undefined) {
-      text = article.innerText.toLowerCase();
+      text = article.textContent.toLowerCase();
       articleTextCache.set(article, text);
     }
     return mutedKeywordsLower.some((kw) => text.includes(kw));
   }
 
-  // === Stats counter ===
+  // === Stats counter (batched to avoid per-post storage I/O) ===
+  let pendingStats = {};
+
   function incrementStat(key) {
-    chrome.storage.local.get({ stats: { today: "", adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 }, statsAllTime: { adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 } }, (data) => {
+    pendingStats[key] = (pendingStats[key] || 0) + 1;
+  }
+
+  function flushStats() {
+    const batch = pendingStats;
+    pendingStats = {};
+    if (Object.keys(batch).length === 0) return;
+    chrome.storage.local.get({
+      stats: { today: "", adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 },
+      statsAllTime: { adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 },
+    }, (data) => {
       const today = new Date().toISOString().slice(0, 10);
       if (data.stats.today !== today) {
         data.stats = { today, adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 };
       }
-      data.stats[key] = (data.stats[key] || 0) + 1;
-      data.statsAllTime[key] = (data.statsAllTime[key] || 0) + 1;
+      for (const [key, count] of Object.entries(batch)) {
+        data.stats[key] = (data.stats[key] || 0) + count;
+        data.statsAllTime[key] = (data.statsAllTime[key] || 0) + count;
+      }
       chrome.storage.local.set(data);
     });
   }
 
-  // Helper: find the <main> element in the active feed document
   function feedMain() {
     return feedDoc.querySelector('main[role="main"]') || feedDoc.querySelector("main");
   }
 
-  // Scan and tag all posts
+  // Scan and tag all posts, then flush stats in a single storage write
   function scanPosts() {
     const main = feedMain();
     if (!main) return;
     const articles = main.querySelectorAll('[role="article"]');
     for (const article of articles) {
-      // Tag post type (once per post — labels are stable)
       if (!article.dataset.ljTypeChecked) {
         article.dataset.ljTypeChecked = "1";
         const labels = detectPostLabels(article);
@@ -171,7 +179,6 @@
           article.dataset.ljRecommended = "true";
           incrementStat("recommendedHidden");
         }
-        // Non-connection: has Follow button and no interaction header
         const hasFollow = !!article.querySelector('button[aria-label*="Follow"]');
         const hasHeader = !!article.querySelector(".update-components-header");
         if (hasFollow && !hasHeader) {
@@ -179,7 +186,6 @@
           incrementStat("strangersHidden");
         }
       }
-      // Tag muted (re-check on every scan since lists can change)
       const wasMuted = article.dataset.ljMuted === "true";
       if (isMutedByPerson(article) || isMutedByKeyword(article)) {
         if (!wasMuted) incrementStat("postsMuted");
@@ -188,16 +194,15 @@
         delete article.dataset.ljMuted;
       }
     }
+    flushStats();
   }
 
   // === Force Recent sort ===
 
   function switchToRecent() {
-    // Open the sort dropdown, then click "Recent"
     const svg = feedDoc.querySelector('[aria-label="Sort order dropdown button"]');
     const sortBtn = svg && svg.closest("button");
     if (!sortBtn) return;
-    // Already on Recent? Skip
     if (sortBtn.textContent.replace(/\s+/g, " ").includes("Recent")) return;
     sortBtn.click();
     setTimeout(() => {
@@ -223,37 +228,22 @@
     return btn;
   }
 
+  function injectMuteBtnInto(container, name) {
+    if (!container) return;
+    Object.assign(container.style, { display: "flex", alignItems: "center", gap: "6px" });
+    container.appendChild(makeMuteBtn(name));
+  }
+
   function injectMuteButtons() {
     const main = feedMain();
     if (!main) return;
-    const articles = main.querySelectorAll('[role="article"]');
-    for (const article of articles) {
+    for (const article of main.querySelectorAll('[role="article"]')) {
       if (article.dataset.ljMuteBtnAdded) continue;
       article.dataset.ljMuteBtnAdded = "1";
-
-      // Mute button next to post author name
       const author = getPostAuthor(article);
-      if (author) {
-        const actorTitle = article.querySelector(".update-components-actor__title");
-        if (actorTitle) {
-          actorTitle.style.display = "flex";
-          actorTitle.style.alignItems = "center";
-          actorTitle.style.gap = "6px";
-          actorTitle.appendChild(makeMuteBtn(author));
-        }
-      }
-
-      // Mute button next to interactor name
+      if (author) injectMuteBtnInto(article.querySelector(".update-components-actor__title"), author);
       const interactor = getInteractor(article);
-      if (interactor) {
-        const header = article.querySelector(".update-components-header");
-        if (header) {
-          header.style.display = "flex";
-          header.style.alignItems = "center";
-          header.style.gap = "6px";
-          header.appendChild(makeMuteBtn(interactor));
-        }
-      }
+      if (interactor) injectMuteBtnInto(article.querySelector(".update-components-header"), interactor);
     }
   }
 
@@ -288,7 +278,7 @@
       rebuildMuteCache();
       scanPosts();
       nudgeScroll();
-      if (added > 1) showToast("Added " + added + " keywords");
+      showToast(added === 1 ? "Added keyword" : "Added " + added + " keywords");
     }
   }
 
@@ -328,7 +318,6 @@
     badge.textContent = count > 0 ? "\uD83D\uDD0D " + count + " filtered" : "\uD83D\uDD0D JobLens";
   }
 
-  // === Apply body classes to the feed document ===
   function applyBodyClasses() {
     feedDoc.body.classList.toggle("lj-hide-promoted", settings.hidePromoted);
     feedDoc.body.classList.toggle("lj-hide-suggested", settings.hideSuggested);
@@ -337,10 +326,10 @@
     feedDoc.body.classList.toggle("lj-hide-sidebar", settings.hideSidebar);
   }
 
-  // === Listen for settings changes from Popup ===
+  // Only re-scan when actual settings change, not stats writes
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    // Re-read all settings and re-apply
+    if (!Object.keys(changes).some((k) => SETTING_KEYS.has(k))) return;
     loadSettings((s) => {
       applyBodyClasses();
       if (s.hideSidebar) enforceSidebarHidden();
@@ -351,61 +340,50 @@
     });
   });
 
-  // === Sidebar enforcement via JS (complement to CSS for SPA navigation) ===
+  // === Sidebar enforcement ===
+  // CSS body class is the primary mechanism; JS polling is the fallback
+  // for async rendering after SPA navigation.
   const SIDEBAR_SELECTORS = [
     'aside[aria-label="LinkedIn News"]',
     '[role="complementary"][aria-label="LinkedIn News"]',
     'footer[aria-label="LinkedIn Footer Content"]',
     '[role="contentinfo"][aria-label="LinkedIn Footer Content"]',
   ];
+  const SIDEBAR_SELECTOR_ALL = SIDEBAR_SELECTORS.join(",");
   let sidebarInterval = null;
 
   function hideSidebarElements() {
-    let hidden = 0;
-    SIDEBAR_SELECTORS.forEach(sel => {
-      feedDoc.querySelectorAll(sel).forEach(node => {
-        if (node.style.display !== "none") {
-          node.style.display = "none";
-          hidden++;
-        }
-      });
+    feedDoc.querySelectorAll(SIDEBAR_SELECTOR_ALL).forEach((node) => {
+      node.style.display = "none";
     });
-    return hidden;
   }
 
   function enforceSidebarHidden() {
-    // Clear any previous enforcement interval
     if (sidebarInterval) clearInterval(sidebarInterval);
-    // Poll every 2s for 30s — lightweight alternative to body MutationObserver
-    // LinkedIn renders sidebar asynchronously after SPA navigation
     hideSidebarElements();
     let ticks = 0;
     sidebarInterval = setInterval(() => {
       hideSidebarElements();
-      ticks++;
-      if (ticks >= 15) clearInterval(sidebarInterval); // stop after 30s
+      if (++ticks >= 15) clearInterval(sidebarInterval);
     }, 2000);
   }
 
-  // === Inject inline <style> into feedDoc for sidebar hiding ===
   function injectSidebarStyle() {
-    if (!feedDoc.getElementById("lj-sidebar-style")) {
-      const s = feedDoc.createElement("style");
-      s.id = "lj-sidebar-style";
-      s.textContent = SIDEBAR_SELECTORS.map(sel => sel + "{display:none!important}").join("\n");
-      feedDoc.head.appendChild(s);
-    }
+    if (feedDoc.getElementById("lj-sidebar-style")) return;
+    const s = feedDoc.createElement("style");
+    s.id = "lj-sidebar-style";
+    s.textContent = SIDEBAR_SELECTOR_ALL + "{display:none!important}";
+    feedDoc.head.appendChild(s);
   }
 
-  // === Inject feed.css into iframe (it won't have extension CSS) ===
+  // === Inject feed.css into iframe (extension CSS doesn't load there) ===
   function injectFeedCssIntoIframe() {
-    if (feedDoc === document) return; // not in iframe
-    if (feedDoc.getElementById("lj-feed-css")) return; // already injected
-    // Copy all feed.css rules from the top frame's extension stylesheet
+    if (feedDoc === document) return;
+    if (feedDoc.getElementById("lj-feed-css")) return;
     for (const sheet of document.styleSheets) {
       try {
         if (!sheet.href || !sheet.href.includes("feed.css")) continue;
-        const rules = [...sheet.cssRules].map(r => r.cssText).join("\n");
+        const rules = [...sheet.cssRules].map((r) => r.cssText).join("\n");
         const style = feedDoc.createElement("style");
         style.id = "lj-feed-css";
         style.textContent = rules;
@@ -415,12 +393,13 @@
     }
   }
 
-  // === Set up MutationObserver on the feed's <main> element ===
+  // === MutationObserver on <main> for infinite scroll ===
   let feedObserver = null;
+  let mainPollInterval = null;
 
   function setupObserver() {
-    // Disconnect previous observer if any
     if (feedObserver) feedObserver.disconnect();
+    if (mainPollInterval) clearInterval(mainPollInterval);
 
     const mainEl = feedMain();
     let debounceTimer = null;
@@ -437,18 +416,35 @@
     if (mainEl) {
       feedObserver.observe(mainEl, { childList: true, subtree: true });
     } else {
-      // Fallback: wait for main to appear, then observe it
-      const target = feedDoc === document ? document.body : feedDoc.body;
-      if (!target) return;
-      const bodyObs = new MutationObserver(() => {
+      // Poll for <main> to appear — avoids body MutationObserver which
+      // freezes LinkedIn due to heavy DOM activity (see project memory).
+      let retries = 0;
+      mainPollInterval = setInterval(() => {
         const m = feedMain();
         if (m) {
-          bodyObs.disconnect();
+          clearInterval(mainPollInterval);
           feedObserver.observe(m, { childList: true, subtree: true });
+          scanPosts();
+          injectMuteButtons();
+          updateBadgeCount();
         }
-      });
-      bodyObs.observe(target, { childList: true, subtree: true });
+        if (++retries >= 15) clearInterval(mainPollInterval);
+      }, 2000);
     }
+  }
+
+  // === Re-apply all features (used after iframe detection or SPA navigation) ===
+  function reapply() {
+    updateFeedDoc();
+    injectFeedCssIntoIframe();
+    applyBodyClasses();
+    if (settings.hideSidebar) { injectSidebarStyle(); enforceSidebarHidden(); }
+    scanPosts();
+    injectMuteButtons();
+    createMiniBadge();
+    updateBadgeCount();
+    setupObserver();
+    if (settings.forceRecent) switchToRecent();
   }
 
   // === Init ===
@@ -457,42 +453,15 @@
     initialized = true;
 
     loadSettings(() => {
-      // Build mute lookup caches
       rebuildMuteCache();
-
-      // Find the active feed document (top frame or iframe)
-      findFeedDoc();
-
-      // If feed is in an iframe, inject our CSS into it
-      injectFeedCssIntoIframe();
-
-      // Apply saved toggle states
-      applyBodyClasses();
-
-      // Sidebar hiding: inline style + JS enforcement
-      if (settings.hideSidebar) {
-        injectSidebarStyle();
-        enforceSidebarHidden();
-      }
-
-      // Initial scan
-      scanPosts();
-      injectMuteButtons();
-
-      // Create mini badge
-      createMiniBadge();
-
-      // Switch to Recent sort if enabled
-      if (settings.forceRecent) switchToRecent();
-
-      // Observe feed's <main> for new posts (infinite scroll)
-      setupObserver();
+      reapply();
+      // Iframe may not be ready yet on initial load — poll for it
+      startIframeCheck();
     });
   }
 
   // === Periodic iframe detection ===
   // After SPA navigation, the iframe may take a moment to load content.
-  // This polls for iframe content and re-applies features when found.
   let iframeCheckInterval = null;
 
   function startIframeCheck() {
@@ -500,33 +469,21 @@
     let ticks = 0;
     iframeCheckInterval = setInterval(() => {
       const prevDoc = feedDoc;
-      findFeedDoc();
+      updateFeedDoc();
       if (feedDoc !== prevDoc) {
-        // Iframe appeared or changed — re-apply everything
-        injectFeedCssIntoIframe();
-        applyBodyClasses();
-        if (settings.hideSidebar) {
-          injectSidebarStyle();
-          enforceSidebarHidden();
-        }
-        scanPosts();
-        injectMuteButtons();
-        createMiniBadge();
-        updateBadgeCount();
-        setupObserver();
-        if (settings.forceRecent) switchToRecent();
+        reapply();
         clearInterval(iframeCheckInterval);
+        return;
       }
-      ticks++;
-      if (ticks >= 10) clearInterval(iframeCheckInterval); // stop after 10s
+      if (++ticks >= 10) clearInterval(iframeCheckInterval);
     }, 1000);
   }
 
-  // Boot immediately if on feed page, otherwise poll for SPA navigation
+  // Boot immediately if on feed page
   boot();
-  // After initial boot, also check for iframe (content may not be ready yet)
-  if (initialized) startIframeCheck();
 
+  // SPA navigation detector — URL polling because LinkedIn intercepts
+  // pushState/popstate and doesn't fire standard navigation events.
   let lastUrl = location.href;
   setInterval(() => {
     if (location.href !== lastUrl) {
@@ -534,24 +491,16 @@
       if (isFeedPage()) {
         if (!initialized) {
           boot();
-          startIframeCheck();
         } else {
-          // Already initialized but navigated back to feed — re-apply
-          findFeedDoc();
-          injectFeedCssIntoIframe();
-          applyBodyClasses();
-          if (settings.hideSidebar) {
-            injectSidebarStyle();
-            enforceSidebarHidden();
-          }
+          reapply();
           startIframeCheck();
         }
       } else {
-        // Left the feed page — reset so boot() runs again when returning
         initialized = false;
         feedDoc = document;
         if (sidebarInterval) clearInterval(sidebarInterval);
         if (iframeCheckInterval) clearInterval(iframeCheckInterval);
+        if (mainPollInterval) clearInterval(mainPollInterval);
         if (feedObserver) feedObserver.disconnect();
       }
     }
