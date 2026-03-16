@@ -21,28 +21,7 @@
     });
   }
 
-  // === Mini Badge ===
-  function createMiniBadge() {
-    if (document.getElementById("lj-mini-badge")) return;
-
-    const badge = document.createElement("div");
-    badge.id = "lj-mini-badge";
-    badge.textContent = settings.hideProfileSidebar ? "\uD83D\uDD0D Sidebar hidden" : "\uD83D\uDD0D JobLens";
-
-    // Inject styles
-    const style = document.createElement("style");
-    style.textContent = `
-      #lj-mini-badge {
-        position: fixed; bottom: 20px; right: 20px; z-index: 99999;
-        background: rgba(250, 247, 242, 0.92); backdrop-filter: blur(12px);
-        border: 1px solid #E4DDD2; border-radius: 20px; padding: 6px 14px;
-        font-family: "EB Garamond", serif; font-size: 13px; color: #1F2328;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06); user-select: none;
-      }
-    `;
-    document.head.appendChild(style);
-    document.body.appendChild(badge);
-  }
+  // Profile page badge removed — no useful info to display here
 
   // === Storage Change Listener ===
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -50,11 +29,6 @@
     if (changes.hideProfileSidebar) {
       settings.hideProfileSidebar = changes.hideProfileSidebar.newValue;
       document.body.classList.toggle("lj-hide-profile-sidebar", changes.hideProfileSidebar.newValue);
-      // Update badge text
-      const badge = document.getElementById("lj-mini-badge");
-      if (badge) {
-        badge.textContent = changes.hideProfileSidebar.newValue ? "\uD83D\uDD0D Sidebar hidden" : "\uD83D\uDD0D JobLens";
-      }
     }
   });
 
@@ -67,7 +41,6 @@
       if (settings.hideProfileSidebar) {
         document.body.classList.add("lj-hide-profile-sidebar");
       }
-      createMiniBadge();
     });
   }
 
@@ -76,7 +49,12 @@
   setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      if (isProfilePage() && !initialized) boot();
+      if (isProfilePage()) {
+        if (!initialized) boot();
+      } else {
+        // Left the profile page — reset so boot() runs again when returning
+        initialized = false;
+      }
     }
   }, 1000);
 })();
