@@ -105,6 +105,26 @@ body.lj-hide-non-connections [data-lj-non-connection="true"],
   background: rgba(250, 247, 242, 0.15);
 }
 
+/* Unfollow button inside toast */
+#lj-toast-unfollow {
+  background: none;
+  border: 1px solid rgba(217, 121, 123, 0.7);
+  color: #D9797B;
+  cursor: pointer;
+  font-family: 'EB Garamond', Garamond, serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 4px;
+  margin-left: 6px;
+  transition: background 0.2s, color 0.2s;
+}
+
+#lj-toast-unfollow:hover {
+  background: #D9797B;
+  color: #fff;
+}
+
 /* === Mini status badge === */
 
 #lj-mini-badge {
