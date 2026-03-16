@@ -848,8 +848,8 @@
     const dimSwitch = makeSwitch("Dim filtered cards", cardsDimmed, toggleDimCards);
 
     const hideHint = el("span", {
-      textContent: "Refresh page to apply",
-      style: "color:#D9797B;font-size:11px;margin-left:6px;display:none",
+      textContent: "(Refresh page to apply)",
+      style: "color:#D9797B;font-size:10px;margin-left:4px;display:none",
     });
     function toggleHideCards(on) {
       cardsHidden = on;
@@ -866,7 +866,8 @@
       }
     }
     const hideSwitch = makeSwitch("Hide filtered cards", cardsHidden, toggleHideCards);
-    hideSwitch.appendChild(hideHint);
+    // Append hint inside the label span, not after the toggle
+    hideSwitch.querySelector("span").appendChild(hideHint);
 
     const switchSection = el("div", { className: "lj-section" }, [
       el("div", { className: "lj-label", textContent: "Options" }),
