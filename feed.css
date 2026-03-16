@@ -111,7 +111,7 @@ body.lj-hide-non-connections [data-lj-non-connection="true"],
 #lj-mini-badge {
   position: fixed;
   top: 70px;
-  left: 20px;
+  right: 20px;
   z-index: 99999;
   background: rgba(250, 247, 242, 0.92);
   backdrop-filter: blur(12px);
@@ -135,7 +135,7 @@ body.lj-hide-non-connections [data-lj-non-connection="true"],
 #lj-badge-tip {
   position: fixed;
   top: 104px;
-  left: 20px;
+  right: 20px;
   z-index: 99999;
   background: rgba(250, 247, 242, 0.96);
   backdrop-filter: blur(12px);
