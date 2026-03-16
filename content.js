@@ -255,7 +255,7 @@
     return card.innerText
       .split("\n")
       .map((l) => l.trim())
-      .filter((l) => l && l !== "·" && l !== "·" && !BADGE_TEXTS.has(l));
+      .filter((l) => l && l !== "·" && !BADGE_TEXTS.has(l));
   }
 
   // ==================== Check if Card Text Indicates Reposted ====================
@@ -513,12 +513,6 @@
   // ==================== Filter Job Cards (check all conditions) ====================
   function filterJobCards() {
     const cards = getJobCards();
-    // Early exit: skip if all cards are already processed (no new unprocessed cards)
-    const hasNew = cards.some(c => !processedCards.has(c));
-    if (!hasNew && cards.length > 0) {
-      // Still check for late-rendered text or changed settings (bypasses processedCards)
-      // The main loop below handles these checks, so just let it run
-    }
     cards.forEach((card) => {
       // These checks bypass processedCards — text may render late or settings may change
       if (!card.dataset.ljReasons?.includes("applied") && cardHasAppliedText(card)) {
@@ -558,10 +552,11 @@
   function checkDetailPanel() {
     const fingerprint = getDetailFingerprint();
     if (!fingerprint || fingerprint === lastDetailText) return;
-    lastDetailText = fingerprint;
 
     const activeCard = getActiveCard();
     if (!activeCard) return;
+    // Only consume fingerprint after successful card match
+    lastDetailText = fingerprint;
 
     const labeled = checkDetailForCard(activeCard);
     if (labeled && !scanning) {
@@ -1078,9 +1073,8 @@
     scanning = false;
     scanAbort = false;
 
-    // Restore all lost badges immediately + one delayed pass after scan completes
-    refreshBadges();
-    setTimeout(refreshBadges, 2000);
+    // Restore all lost badges after scan completes (LinkedIn may re-render cards)
+    setTimeout(refreshBadges, 500);
 
     const flagged = getJobCards().filter(c => c.dataset.ljReasons).length;
     showScanDone(flagged);

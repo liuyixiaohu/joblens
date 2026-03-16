@@ -252,17 +252,22 @@
     }));
 
     // Muted People list
-    var renderPeople = createListSection(feedGroup, "Muted People", settings.mutedPeople, "Name...", function (raw) {
-      var name = raw.trim();
-      if (!name) return;
-      if (settings.mutedPeople.some(function (n) { return n.toLowerCase() === name.toLowerCase(); })) {
+    var renderPeople = createListSection(feedGroup, "Muted People", settings.mutedPeople, "Name (comma-separated)...", function (raw) {
+      var items = raw.split(/[,\n]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+      var added = 0;
+      items.forEach(function (name) {
+        if (!settings.mutedPeople.some(function (n) { return n.toLowerCase() === name.toLowerCase(); })) {
+          settings.mutedPeople.push(name);
+          added++;
+        }
+      });
+      if (added > 0) {
+        chrome.storage.local.set({ mutedPeople: settings.mutedPeople });
+        renderPeople(settings.mutedPeople);
+        showToast("Muted " + added + " person" + (added > 1 ? "s" : ""));
+      } else {
         showToast("Already muted");
-        return;
       }
-      settings.mutedPeople.push(name);
-      chrome.storage.local.set({ mutedPeople: settings.mutedPeople });
-      renderPeople(settings.mutedPeople);
-      showToast("Muted " + name);
     }, function (name) {
       settings.mutedPeople = settings.mutedPeople.filter(function (n) {
         return n.toLowerCase() !== name.toLowerCase();
