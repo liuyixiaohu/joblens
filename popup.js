@@ -425,6 +425,23 @@
     });
     allTimeSection.appendChild(allTimeGrid);
     container.appendChild(allTimeSection);
+
+    // Reset Stats button
+    var resetRow = document.createElement("div");
+    resetRow.style.cssText = "text-align:center;margin-top:12px;";
+    var resetBtn = document.createElement("button");
+    resetBtn.className = "data-btn data-btn-reset";
+    resetBtn.textContent = "Reset Stats";
+    resetBtn.style.cssText = "font-size:12px;padding:4px 14px;";
+    resetBtn.addEventListener("click", function () {
+      if (!confirm("Reset all stats to zero?")) return;
+      chrome.storage.local.set(STATS_DEFAULTS, function () {
+        buildStatsTab(STATS_DEFAULTS.stats, STATS_DEFAULTS.statsAllTime);
+        showToast("Stats reset");
+      });
+    });
+    resetRow.appendChild(resetBtn);
+    container.appendChild(resetRow);
   }
 
   function createStatCard(number, label) {
@@ -572,6 +589,9 @@
       startStatsRefresh();
     });
   }
+
+  // Auto-fill version from manifest
+  document.getElementById("popup-version").textContent = "v" + chrome.runtime.getManifest().version;
 
   loadAndBuild();
 
