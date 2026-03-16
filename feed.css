@@ -88,7 +88,7 @@ body.lj-hide-non-connections [data-lj-non-connection="true"],
 
 #lj-mini-badge {
   position: fixed;
-  top: 20px;
+  top: 70px;
   left: 20px;
   z-index: 99999;
   background: rgba(250, 247, 242, 0.92);
