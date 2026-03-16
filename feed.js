@@ -227,7 +227,7 @@
 
   // === Mute button injection on posts ===
 
-  function makeMuteBtn(name, article) {
+  function makeMuteBtn(name) {
     const btn = feedDoc.createElement("button");
     btn.className = "lj-mute-btn";
     btn.title = "Mute " + name;
@@ -235,7 +235,20 @@
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
-      addMutedPerson(name, article);
+      addMutedPerson(name);
+    });
+    return btn;
+  }
+
+  function makeUnfollowBtn(article) {
+    const btn = feedDoc.createElement("button");
+    btn.className = "lj-mute-btn";
+    btn.title = "Open menu to unfollow";
+    btn.textContent = "Unfollow";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      openPostMenu(article);
     });
     return btn;
   }
@@ -243,7 +256,8 @@
   function injectMuteBtnInto(container, name, article) {
     if (!container) return;
     Object.assign(container.style, { display: "flex", alignItems: "center", gap: "6px" });
-    container.appendChild(makeMuteBtn(name, article));
+    container.appendChild(makeMuteBtn(name));
+    container.appendChild(makeUnfollowBtn(article));
   }
 
   function injectMuteButtons() {
@@ -262,32 +276,18 @@
   // Open the post's "..." menu so the user can click Unfollow themselves
   function openPostMenu(article) {
     if (!article) return;
-    // Temporarily un-hide the post so the menu can render
-    const wasMuted = article.dataset.ljMuted;
-    article.dataset.ljMuted = "paused";
-    article.scrollIntoView({ behavior: "smooth", block: "center" });
-    setTimeout(() => {
-      const menuBtn = article.querySelector('button[aria-label*="control menu"]');
-      if (menuBtn) menuBtn.click();
-      // Re-hide after user has had time to interact with the dropdown
-      setTimeout(() => {
-        if (article.dataset.ljMuted === "paused") article.dataset.ljMuted = wasMuted || "true";
-      }, 8000);
-    }, 300);
+    const menuBtn = article.querySelector('button[aria-label*="control menu"]');
+    if (menuBtn) menuBtn.click();
   }
 
-  function addMutedPerson(name, article) {
+  function addMutedPerson(name) {
     if (settings.mutedPeople.some((n) => n.toLowerCase() === name.toLowerCase())) return;
     settings.mutedPeople.push(name);
     saveList("mutedPeople");
     rebuildMuteCache();
     scanPosts();
     nudgeScroll();
-    showToast(
-      "Muted " + name,
-      () => removeMutedPerson(name),
-      article ? () => openPostMenu(article) : null,
-    );
+    showToast("Muted " + name, () => removeMutedPerson(name));
   }
 
   function removeMutedPerson(name) {
@@ -367,7 +367,7 @@
   // === Toast notification (with optional undo action) ===
   let toastTimer = null;
 
-  function showToast(msg, onUndo, onUnfollow) {
+  function showToast(msg, onUndo) {
     let toast = feedDoc.getElementById("lj-feed-toast");
     if (!toast) {
       toast = feedDoc.createElement("div");
@@ -388,20 +388,8 @@
       });
       toast.appendChild(btn);
     }
-    if (onUnfollow) {
-      const btn = feedDoc.createElement("button");
-      btn.id = "lj-toast-unfollow";
-      btn.textContent = "Unfollow";
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onUnfollow();
-        toast.classList.remove("visible");
-      });
-      toast.appendChild(btn);
-    }
-    const hasActions = onUndo || onUnfollow;
     toast.classList.add("visible");
-    toastTimer = setTimeout(() => toast.classList.remove("visible"), hasActions ? 5000 : 1800);
+    toastTimer = setTimeout(() => toast.classList.remove("visible"), onUndo ? 5000 : 1800);
   }
 
   // === Mini status badge (clickable with breakdown) ===
