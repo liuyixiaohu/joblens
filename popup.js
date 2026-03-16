@@ -15,6 +15,7 @@
     sponsorCheckEnabled: true,
     unpaidCheckEnabled: true,
     dimFiltered: false,
+    hideFiltered: false,
     skippedCompanies: [],
     skippedTitleKeywords: [],
   };
@@ -315,6 +316,9 @@
     }));
     jobsGroup.appendChild(createToggle("Dim Filtered Cards", settings.dimFiltered, function (v) {
       chrome.storage.local.set({ dimFiltered: v });
+    }));
+    jobsGroup.appendChild(createToggle("Hide Filtered Cards", settings.hideFiltered, function (v) {
+      chrome.storage.local.set({ hideFiltered: v });
     }));
 
     // Skipped Companies list
