@@ -306,13 +306,46 @@
     setTimeout(() => toast.classList.remove("visible"), 1800);
   }
 
-  // === Mini status badge ===
+  // === Mini status badge (clickable with breakdown) ===
   function createMiniBadge() {
     if (feedDoc.getElementById("lj-mini-badge")) return;
     const badge = feedDoc.createElement("div");
     badge.id = "lj-mini-badge";
+    badge.style.cursor = "pointer";
     feedDoc.body.appendChild(badge);
+
+    // Breakdown tooltip
+    const tip = feedDoc.createElement("div");
+    tip.id = "lj-badge-tip";
+    feedDoc.body.appendChild(tip);
+
+    badge.addEventListener("click", () => {
+      tip.classList.toggle("visible");
+      if (tip.classList.contains("visible")) updateBreakdown();
+    });
+
+    // Close on click outside
+    feedDoc.addEventListener("click", (e) => {
+      if (!badge.contains(e.target) && !tip.contains(e.target)) {
+        tip.classList.remove("visible");
+      }
+    });
+
     updateBadgeCount();
+  }
+
+  function updateBreakdown() {
+    const tip = feedDoc.getElementById("lj-badge-tip");
+    if (!tip) return;
+    const counts = {
+      Ads: feedDoc.querySelectorAll('[data-lj-promoted="true"]').length,
+      Suggested: feedDoc.querySelectorAll('[data-lj-suggested="true"]').length,
+      Recommended: feedDoc.querySelectorAll('[data-lj-recommended="true"]').length,
+      Strangers: feedDoc.querySelectorAll('[data-lj-non-connection="true"]').length,
+      Muted: feedDoc.querySelectorAll('[data-lj-muted="true"]').length,
+    };
+    const lines = Object.entries(counts).filter(([, v]) => v > 0).map(([k, v]) => v + " " + k);
+    tip.textContent = lines.length > 0 ? lines.join("\n") : "Nothing filtered yet";
   }
 
   function updateBadgeCount() {
@@ -320,6 +353,9 @@
     if (!badge) return;
     const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-muted="true"]').length;
     badge.textContent = count > 0 ? "\uD83D\uDD0D " + count + " filtered" : "\uD83D\uDD0D JobLens";
+    // Also update breakdown if visible
+    const tip = feedDoc.getElementById("lj-badge-tip");
+    if (tip && tip.classList.contains("visible")) updateBreakdown();
   }
 
   function applyBodyClasses() {

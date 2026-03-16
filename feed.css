@@ -100,7 +100,39 @@ body.lj-hide-non-connections [data-lj-non-connection="true"],
   font-size: 13px;
   color: #1F2328;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  cursor: default;
+  cursor: pointer;
   user-select: none;
   transition: opacity 0.3s;
+}
+
+#lj-mini-badge:hover {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+}
+
+/* Badge breakdown tooltip */
+#lj-badge-tip {
+  position: fixed;
+  top: 104px;
+  left: 20px;
+  z-index: 99999;
+  background: rgba(250, 247, 242, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid #E4DDD2;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-family: "EB Garamond", serif;
+  font-size: 12px;
+  color: #1F2328;
+  white-space: pre-line;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+#lj-badge-tip.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
