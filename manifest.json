@@ -3,7 +3,10 @@
   "name": "JobLens",
   "version": "1.4",
   "description": "Clean up LinkedIn: filter jobs, hide feed ads & distractions, mute people & keywords.",
-  "permissions": ["storage"],
+  "permissions": ["storage", "contextMenus"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://www.linkedin.com/*"],

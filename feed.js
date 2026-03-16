@@ -293,6 +293,13 @@
     scanPosts();
   }
 
+  // === Context menu message handler ===
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg?.type !== "lj-context-menu" || !isFeedPage()) return;
+    if (msg.action === "mutePerson") addMutedPerson(msg.text);
+    else if (msg.action === "muteKeyword") addMutedKeyword(msg.text);
+  });
+
   // === Toast notification (with optional undo action) ===
   let toastTimer = null;
 
