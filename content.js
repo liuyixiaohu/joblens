@@ -646,17 +646,12 @@
       ".lj-label{font-size:11px;color:#5A636B;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:600}",
       ".lj-label-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}",
       ".lj-label-row .lj-label{margin-bottom:0}",
-      ".lj-copy-btn{background:none;border:1px solid #E4DDD2;color:#5A636B;border-radius:4px;padding:1px 8px;cursor:pointer;font-size:10px;line-height:1.4;font-family:'EB Garamond',Garamond,serif}",
-      ".lj-copy-btn:hover{color:#1F2328;border-color:#1F2328}",
-      // Lists
-      ".lj-list{margin-bottom:8px}",
-      ".lj-list-toggle{background:none;border:none;color:#5A636B;cursor:pointer;font-size:11px;font-family:'EB Garamond',Garamond,serif;padding:3px 0;width:100%;text-align:center}",
-      ".lj-list-toggle:hover{color:#1F2328}",
-      ".lj-list::-webkit-scrollbar{width:4px}",
-      ".lj-list::-webkit-scrollbar-thumb{background:#E4DDD2;border-radius:4px}",
-      ".lj-item{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:#F3EFE7;border-radius:6px;margin-bottom:3px}",
-      ".lj-item span{color:#1F2328;font-size:12px}",
-      ".lj-x{background:none;border:none;color:#D9797B;cursor:pointer;font-size:16px;padding:0 2px;line-height:1}",
+      // Recent item display (replaces full list in floating panel)
+      ".lj-recent{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;color:#5A636B}",
+      ".lj-recent-hint{font-style:italic;color:#8A939B}",
+      ".lj-recent-count{color:#8A939B;flex-shrink:0}",
+      ".lj-recent-last{color:#1F2328;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}",
+      ".lj-x{background:none;border:none;color:#D9797B;cursor:pointer;font-size:16px;padding:0 2px;line-height:1;flex-shrink:0}",
       ".lj-x:hover{color:#9a6868}",
       // Input + button
       ".lj-add{display:flex;gap:6px}",
@@ -790,15 +785,7 @@
       }
     }
 
-    function copyList(list, label) {
-      navigator.clipboard.writeText(list.join(", ")).then(() => {
-        showToast("Copied " + list.length + " " + label);
-      }).catch(() => {
-        showToast("Copy failed — try again");
-      });
-    }
-
-    ui.companyList = el("div", { className: "lj-list" });
+    ui.companyRecent = el("div", { className: "lj-recent" });
     const companyInput = el("input", { type: "text", placeholder: "Company name..." });
     const companyAddBtn = el("button", { textContent: "Add", onClick: () => {
       const raw = companyInput.value.trim();
@@ -807,11 +794,6 @@
       companyInput.value = "";
     }});
     companyInput.addEventListener("keypress", (e) => { if (e.key === "Enter") companyAddBtn.click(); });
-    const companyCopyBtn = el("button", {
-      className: "lj-copy-btn",
-      textContent: "Copy",
-      onClick: () => copyList(skippedCompanies, "companies")
-    });
 
     const skipCurrentBtn = el("button", {
       className: "lj-quick-skip-btn",
@@ -820,16 +802,13 @@
     });
 
     const companySection = el("div", { className: "lj-section" }, [
-      el("div", { className: "lj-label-row" }, [
-        el("span", { className: "lj-label", textContent: "Skipped Companies" }),
-        companyCopyBtn,
-      ]),
-      ui.companyList,
+      el("span", { className: "lj-label", textContent: "Skipped Companies" }),
+      ui.companyRecent,
       el("div", { className: "lj-add" }, [companyInput, companyAddBtn]),
       el("div", { className: "lj-quick-skip" }, [skipCurrentBtn]),
     ]);
 
-    ui.titleList = el("div", { className: "lj-list" });
+    ui.titleRecent = el("div", { className: "lj-recent" });
     const titleInput = el("input", { type: "text", placeholder: "Keyword..." });
     const titleAddBtn = el("button", { textContent: "Add", onClick: () => {
       const raw = titleInput.value.trim();
@@ -838,18 +817,10 @@
       titleInput.value = "";
     }});
     titleInput.addEventListener("keypress", (e) => { if (e.key === "Enter") titleAddBtn.click(); });
-    const titleCopyBtn = el("button", {
-      className: "lj-copy-btn",
-      textContent: "Copy",
-      onClick: () => copyList(skippedTitleKeywords, "keywords")
-    });
 
     const titleSection = el("div", { className: "lj-section" }, [
-      el("div", { className: "lj-label-row" }, [
-        el("span", { className: "lj-label", textContent: "Skipped Title Keywords" }),
-        titleCopyBtn,
-      ]),
-      ui.titleList,
+      el("span", { className: "lj-label", textContent: "Skipped Title Keywords" }),
+      ui.titleRecent,
       el("div", { className: "lj-add" }, [titleInput, titleAddBtn]),
     ]);
 
@@ -968,54 +939,37 @@
 
   // ==================== Render Skip Lists ====================
   function renderLists() {
-    renderList(ui.companyList, skippedCompanies, "company");
-    renderList(ui.titleList, skippedTitleKeywords, "title");
+    renderRecent(ui.companyRecent, skippedCompanies, "company");
+    renderRecent(ui.titleRecent, skippedTitleKeywords, "title");
   }
 
-  const LIST_COLLAPSE_LIMIT = 5;
-
-  function renderList(container, items, type) {
+  // Show count + most recently added item (last in array) with remove button
+  function renderRecent(container, items, type) {
     if (!container) return;
     while (container.firstChild) container.removeChild(container.firstChild);
 
     if (items.length === 0) {
-      const hint = type === "company" ? "Add a company to start skipping" : "Add a keyword to filter titles";
-      container.appendChild(el("div", { className: "lj-empty", textContent: hint }));
+      container.appendChild(el("span", { className: "lj-recent-hint", textContent: "None yet" }));
       return;
     }
 
-    const expanded = container._ljExpanded || false;
-    const showAll = expanded || items.length <= LIST_COLLAPSE_LIMIT;
-    const visible = showAll ? items : items.slice(0, LIST_COLLAPSE_LIMIT);
+    const last = items[items.length - 1];
+    const lastIdx = items.length - 1;
+    const countText = items.length + " total";
 
-    visible.forEach((name, i) => {
-      const removeBtn = el("button", {
-        className: "lj-x",
-        textContent: "\u00d7",
-        onClick: (e) => {
-          e.stopPropagation();
-          removeFromList(type, i);
-        }
-      });
-      const item = el("div", { className: "lj-item" }, [
-        el("span", { textContent: name }),
-        removeBtn
-      ]);
-      container.appendChild(item);
+    const removeBtn = el("button", {
+      className: "lj-x",
+      textContent: "\u00d7",
+      title: "Remove "" + last + """,
+      onClick: (e) => {
+        e.stopPropagation();
+        removeFromList(type, lastIdx);
+      }
     });
 
-    if (items.length > LIST_COLLAPSE_LIMIT) {
-      const hidden = items.length - LIST_COLLAPSE_LIMIT;
-      const toggleBtn = el("button", {
-        className: "lj-list-toggle",
-        textContent: expanded ? "Show less" : "+" + hidden + " more...",
-        onClick: () => {
-          container._ljExpanded = !expanded;
-          renderList(container, items, type);
-        }
-      });
-      container.appendChild(toggleBtn);
-    }
+    container.appendChild(el("span", { className: "lj-recent-count", textContent: countText }));
+    container.appendChild(el("span", { className: "lj-recent-last", textContent: "Last: " + last }));
+    container.appendChild(removeBtn);
   }
 
   function removeFromList(type, index) {
