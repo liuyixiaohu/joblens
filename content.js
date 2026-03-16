@@ -72,9 +72,9 @@
   let hasSeenIntro = false;
   let panelPosition = null;
 
-  // Only activate on search results pages (/jobs/search/ and /jobs/search-results/)
+  // Only activate on search results pages
   function isSearchPage() {
-    return /\/jobs\/search/.test(location.href);
+    return /\/jobs\/search-results\//.test(location.href);
   }
 
   // ==================== Storage ====================
@@ -162,10 +162,6 @@
       }
     });
 
-    // Fallback: /jobs/search/ uses scaffold list items without dismiss buttons
-    if (cards.length === 0) {
-      return [...document.querySelectorAll("li.scaffold-layout__list-item")];
-    }
     return cards;
   }
 
@@ -283,12 +279,10 @@
   // ==================== Check Detail Panel for Reposted ====================
   function detailPanelHasReposted() {
     // "Reposted" appears near the top of the detail panel in a <strong> or <span>
-    // Try narrow scope first (old /jobs/search/ layout), then fall back to document-wide search
     const detail =
-      document.querySelector(".jobs-search__job-details") ||
       document.querySelector(".jobs-details") ||
       document.querySelector("article") ||
-      document.body;  // fallback for /jobs/search-results/ which has no semantic container
+      document.body;
     const candidates = detail.querySelectorAll("strong, span");
     for (const node of candidates) {
       if (node.children.length > 0) continue;
@@ -853,16 +847,26 @@
     }
     const dimSwitch = makeSwitch("Dim filtered cards", cardsDimmed, toggleDimCards);
 
+    const hideHint = el("span", {
+      textContent: "Refresh page to apply",
+      style: "color:#D9797B;font-size:11px;margin-left:6px;display:none",
+    });
     function toggleHideCards(on) {
       cardsHidden = on;
       saveValue("hideFiltered", on);
-      document.querySelectorAll("[data-lj-filtered]").forEach(card => {
-        const vis = getVisibleEl(card);
-        if (on) { vis.classList.add("lj-card-hidden"); vis.classList.remove("lj-card-dimmed"); }
-        else { vis.classList.remove("lj-card-hidden"); if (cardsDimmed) vis.classList.add("lj-card-dimmed"); }
-      });
+      if (on) {
+        hideHint.style.display = "none";
+        document.querySelectorAll("[data-lj-filtered]").forEach(card => {
+          const vis = getVisibleEl(card);
+          vis.classList.add("lj-card-hidden");
+          vis.classList.remove("lj-card-dimmed");
+        });
+      } else {
+        hideHint.style.display = "inline";
+      }
     }
     const hideSwitch = makeSwitch("Hide filtered cards", cardsHidden, toggleHideCards);
+    hideSwitch.appendChild(hideHint);
 
     const switchSection = el("div", { className: "lj-section" }, [
       el("div", { className: "lj-label", textContent: "Options" }),
@@ -1006,7 +1010,6 @@
   function waitForDetailChange(oldFingerprint, timeoutMs = 5000) {
     return new Promise((resolve) => {
       const detailContainer =
-        document.querySelector(".jobs-search__job-details") ||
         document.querySelector("main") ||
         document.body;
 
@@ -1282,12 +1285,6 @@
       unpaidCheckEnabled = data.unpaidCheckEnabled;
       cardsDimmed = data.dimFiltered;
       cardsHidden = data.hideFiltered;
-      // Re-apply dim/hide classes to all filtered cards
-      document.querySelectorAll("[data-lj-filtered]").forEach(card => {
-        const vis = getVisibleEl(card);
-        vis.classList.toggle("lj-card-hidden", cardsHidden);
-        vis.classList.toggle("lj-card-dimmed", !cardsHidden && cardsDimmed);
-      });
       renderLists();
       processedCards = new WeakSet();  // reset so all cards get re-evaluated with new settings
       filterJobCards();
