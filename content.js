@@ -1,5 +1,7 @@
 (function () {
   "use strict";
+  // After extension reload/update, old content scripts lose chrome API access.
+  if (!chrome.runtime?.id) return;
   if (window.__ljContentLoaded) return;
   window.__ljContentLoaded = true;
 
