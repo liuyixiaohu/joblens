@@ -960,7 +960,7 @@
     const removeBtn = el("button", {
       className: "lj-x",
       textContent: "\u00d7",
-      title: "Remove "" + last + """,
+      title: "Remove \u201C" + last + "\u201D",
       onClick: (e) => {
         e.stopPropagation();
         removeFromList(type, lastIdx);
