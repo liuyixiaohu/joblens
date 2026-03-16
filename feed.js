@@ -1,4 +1,4 @@
-// JobLens Feed: filter posts, hide sidebar, mute people/keywords, SPA/iframe-aware
+// Sift Feed: filter posts, hide sidebar, mute people/keywords, SPA/iframe-aware
 (function () {
   "use strict";
 
@@ -417,7 +417,7 @@
     const badge = feedDoc.getElementById("lj-mini-badge");
     if (!badge) return;
     const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-muted="true"]').length;
-    badge.textContent = count > 0 ? "\uD83D\uDD0D " + count + " filtered" : "\uD83D\uDD0D JobLens";
+    badge.textContent = count > 0 ? "\uD83D\uDD0D " + count + " filtered" : "\uD83D\uDD0D Sift";
     // Also update breakdown if visible
     const tip = feedDoc.getElementById("lj-badge-tip");
     if (tip && tip.classList.contains("visible")) updateBreakdown();

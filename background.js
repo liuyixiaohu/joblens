@@ -1,4 +1,4 @@
-/* JobLens — background service worker (context menus) */
+/* Sift — background service worker (context menus) */
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({

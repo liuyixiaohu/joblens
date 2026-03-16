@@ -719,7 +719,7 @@
 
     const togBtn = el("button", { className: "lj-toggle", textContent: "\u2212" });
     const header = el("div", { className: "lj-header" }, [
-      el("h3", { textContent: "JobLens" }),
+      el("h3", { textContent: "Sift" }),
       togBtn
     ]);
 
@@ -874,7 +874,7 @@
 
     const feedbackLink = el("a", {
       className: "lj-feedback",
-      textContent: "Shape JobLens \u2192",
+      textContent: "Shape Sift \u2192",
       href: "https://kunli.co/joblens",
       target: "_blank",
     });
@@ -1067,7 +1067,7 @@
         }
       }
     } catch (err) {
-      console.error("[JobLens] Scan error:", err);
+      console.error("[Sift] Scan error:", err);
       showToast("Scan error: " + err.message);
     }
 

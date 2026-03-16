@@ -511,7 +511,7 @@
         var url = URL.createObjectURL(blob);
         var a = document.createElement("a");
         a.href = url;
-        a.download = "joblens-backup-" + getTodayString() + ".json";
+        a.download = "sift-backup-" + getTodayString() + ".json";
         a.click();
         URL.revokeObjectURL(url);
         showToast("Backup exported");
@@ -564,7 +564,7 @@
     resetBtn.className = "data-btn data-btn-reset";
     resetBtn.textContent = "Reset All Data";
     resetBtn.addEventListener("click", function () {
-      if (confirm("Are you sure you want to reset all JobLens settings and stats? This cannot be undone.")) {
+      if (confirm("Are you sure you want to reset all Sift settings and stats? This cannot be undone.")) {
         chrome.storage.local.clear(function () {
           showToast("All data cleared");
           loadAndBuild();
