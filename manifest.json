@@ -2,17 +2,17 @@
   "manifest_version": 3,
   "name": "JobLens",
   "version": "1.4",
-  "description": "Clean up LinkedIn: filter jobs, hide feed ads & distractions, mute people & keywords, and declutter profile pages.",
+  "description": "Clean up LinkedIn: filter jobs, hide feed ads & distractions, mute people & keywords.",
   "permissions": ["storage"],
   "content_scripts": [
     {
       "matches": ["https://www.linkedin.com/*"],
-      "css": ["feed.css", "profile.css"],
+      "css": ["feed.css"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://www.linkedin.com/*"],
-      "js": ["content.js", "feed.js", "profile.js"],
+      "js": ["content.js", "feed.js"],
       "run_at": "document_idle"
     }
   ],
