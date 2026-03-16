@@ -1,5 +1,7 @@
 (function () {
   "use strict";
+  if (window.__ljContentLoaded) return;
+  window.__ljContentLoaded = true;
 
   const NO_SPONSOR_KEYWORDS = [
     "does not sponsor", "do not sponsor", "not sponsor",
@@ -180,6 +182,18 @@
     return card;
   }
 
+  // Find the LAST visible child — used for badge placement so badges anchor to the
+  // visual bottom of display:contents cards (where children are laid out independently)
+  function getLastVisibleEl(card) {
+    if (getComputedStyle(card).display !== "contents") return card;
+    const children = [...card.children];
+    for (let i = children.length - 1; i >= 0; i--) {
+      const d = getComputedStyle(children[i]).display;
+      if (d !== "contents" && d !== "none") return children[i];
+    }
+    return getVisibleEl(card); // fallback to first visible
+  }
+
   // ==================== Extract jobId from Card ====================
   // LinkedIn uses two link formats:
   //   1. /jobs/view/12345  (legacy/detail page)
@@ -358,12 +372,15 @@
   // Clear badge DOM and inline styles from card (both scope and visible elements)
   function clearBadges(card) {
     const target = getVisibleEl(card);
+    const badgeTarget = getLastVisibleEl(card);
     card.querySelectorAll(".lj-badges").forEach(b => b.remove());
-    if (target !== card) {
-      target.querySelectorAll(".lj-badges").forEach(b => b.remove());
-      target.style.borderLeft = "";
-      target.style.position = "";
-      target.style.overflow = "";
+    for (const el of [target, badgeTarget]) {
+      if (el !== card) {
+        el.querySelectorAll(".lj-badges").forEach(b => b.remove());
+        el.style.borderLeft = "";
+        el.style.position = "";
+        el.style.overflow = "";
+      }
     }
   }
 
@@ -374,17 +391,26 @@
     if (reasons.length === 0) return;
 
     const target = getVisibleEl(card);
+    // For display:contents cards, badges go on the last visible child (visual bottom)
+    const badgeTarget = getLastVisibleEl(card);
 
     // Already has correct badges → skip
-    const existing = target.querySelector(".lj-badges");
+    const existing = badgeTarget.querySelector(".lj-badges");
     if (existing && existing.dataset.r === card.dataset.ljReasons) return;
 
     clearBadges(card);
 
-    // Set border + position on visible element (inline style)
+    // Set border on the first visible element (top of card)
     target.style.position = "relative";
     target.style.overflow = "visible";
     target.style.borderLeft = "3px solid " + (BADGE_COLOR);
+
+    // If badge target differs from border target, also set position on it
+    if (badgeTarget !== target) {
+      badgeTarget.style.position = "relative";
+      badgeTarget.style.overflow = "visible";
+      badgeTarget.style.borderLeft = "3px solid " + (BADGE_COLOR);
+    }
 
     const container = document.createElement("div");
     container.className = "lj-badges";
@@ -398,7 +424,7 @@
       container.appendChild(badge);
     });
 
-    target.insertBefore(container, target.firstChild);
+    badgeTarget.appendChild(container);
 
     // Auto-dim newly labeled cards when dim mode is enabled
     if (cardsDimmed) target.classList.add("lj-card-dimmed");
@@ -408,8 +434,8 @@
   function refreshBadges() {
     // 1. data attribute present but badge DOM missing → re-insert
     document.querySelectorAll("[data-lj-reasons]").forEach(card => {
-      const target = getVisibleEl(card);
-      const existing = target.querySelector(".lj-badges");
+      const badgeTarget = getLastVisibleEl(card);
+      const existing = badgeTarget.querySelector(".lj-badges");
       if (!existing || existing.dataset.r !== card.dataset.ljReasons) {
         applyBadges(card);
       }

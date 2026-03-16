@@ -2,6 +2,13 @@
 (function () {
   "use strict";
 
+  function isFeedPage() {
+    const p = location.pathname;
+    return p === "/" || p.startsWith("/feed");
+  }
+
+  let initialized = false;
+
   // === Storage ===
   const DEFAULTS = {
     hidePromoted: true,
@@ -307,6 +314,7 @@
       document.body.classList.toggle("lj-hide-recommended", s.hideRecommended);
       document.body.classList.toggle("lj-hide-non-connections", s.hideNonConnections);
       document.body.classList.toggle("lj-hide-sidebar", s.hideSidebar);
+      if (s.hideSidebar) enforceSidebarHidden();
       rebuildMuteCache();
       scanPosts();
       updateBadgeCount();
@@ -314,53 +322,130 @@
     });
   });
 
-  // === Init ===
-  loadSettings(() => {
-    // Build mute lookup caches
-    rebuildMuteCache();
+  // === Sidebar enforcement via JS (complement to CSS for SPA navigation) ===
+  const SIDEBAR_SELECTORS = [
+    'aside[aria-label="LinkedIn News"]',
+    '[role="complementary"][aria-label="LinkedIn News"]',
+    'footer[aria-label="LinkedIn Footer Content"]',
+    '[role="contentinfo"][aria-label="LinkedIn Footer Content"]',
+  ];
+  let sidebarInterval = null;
 
-    // Apply saved toggle states
-    if (settings.hidePromoted) document.body.classList.add("lj-hide-promoted");
-    if (settings.hideSuggested) document.body.classList.add("lj-hide-suggested");
-    if (settings.hideRecommended) document.body.classList.add("lj-hide-recommended");
-    if (settings.hideNonConnections) document.body.classList.add("lj-hide-non-connections");
-    if (settings.hideSidebar) document.body.classList.add("lj-hide-sidebar");
-
-    // Initial scan
-    scanPosts();
-    injectMuteButtons();
-
-    // Create mini badge
-    createMiniBadge();
-
-    // Switch to Recent sort if enabled
-    if (settings.forceRecent) switchToRecent();
-
-    // Observe only <main> for new posts (infinite scroll)
-    // Narrower scope avoids self-triggered loops from panel/toast DOM changes
-    const mainEl = document.querySelector('main[role="main"]') || document.querySelector("main");
-    let debounceTimer = null;
-    const observer = new MutationObserver(() => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        scanPosts();
-        injectMuteButtons();
-        updateBadgeCount();
-        nudgeScroll();
-      }, 300);
-    });
-    if (mainEl) {
-      observer.observe(mainEl, { childList: true, subtree: true });
-    } else {
-      // Fallback: wait for main to appear, then observe it
-      const bodyObs = new MutationObserver(() => {
-        const m = document.querySelector('main[role="main"]') || document.querySelector("main");
-        if (m) {
-          bodyObs.disconnect();
-          observer.observe(m, { childList: true, subtree: true });
+  function hideSidebarElements() {
+    let hidden = 0;
+    SIDEBAR_SELECTORS.forEach(sel => {
+      document.querySelectorAll(sel).forEach(node => {
+        if (node.style.display !== "none") {
+          node.style.display = "none";
+          hidden++;
         }
       });
-      bodyObs.observe(document.body, { childList: true, subtree: true });
+    });
+    return hidden;
+  }
+
+  function enforceSidebarHidden() {
+    // Clear any previous enforcement interval
+    if (sidebarInterval) clearInterval(sidebarInterval);
+    // Poll every 2s for 30s — lightweight alternative to body MutationObserver
+    // LinkedIn renders sidebar asynchronously after SPA navigation
+    hideSidebarElements();
+    let ticks = 0;
+    sidebarInterval = setInterval(() => {
+      hideSidebarElements();
+      ticks++;
+      if (ticks >= 15) clearInterval(sidebarInterval); // stop after 30s
+    }, 2000);
+  }
+
+  // === Init ===
+  function boot() {
+    if (initialized || !isFeedPage()) return;
+    initialized = true;
+
+    loadSettings(() => {
+      // Build mute lookup caches
+      rebuildMuteCache();
+
+      // Apply saved toggle states
+      if (settings.hidePromoted) document.body.classList.add("lj-hide-promoted");
+      if (settings.hideSuggested) document.body.classList.add("lj-hide-suggested");
+      if (settings.hideRecommended) document.body.classList.add("lj-hide-recommended");
+      if (settings.hideNonConnections) document.body.classList.add("lj-hide-non-connections");
+      if (settings.hideSidebar) document.body.classList.add("lj-hide-sidebar");
+
+      // Actively hide sidebar elements via JS (CSS class alone may not survive SPA navigation)
+      // Also inject inline <style> as backup in case external CSS didn't survive SPA nav
+      if (settings.hideSidebar) {
+        if (!document.getElementById("lj-sidebar-style")) {
+          const s = document.createElement("style");
+          s.id = "lj-sidebar-style";
+          s.textContent = SIDEBAR_SELECTORS.map(sel => sel + "{display:none!important}").join("\n");
+          document.head.appendChild(s);
+        }
+        enforceSidebarHidden();
+      }
+
+      // Initial scan
+      scanPosts();
+      injectMuteButtons();
+
+      // Create mini badge
+      createMiniBadge();
+
+      // Switch to Recent sort if enabled
+      if (settings.forceRecent) switchToRecent();
+
+      // Observe only <main> for new posts (infinite scroll)
+      // Narrower scope avoids self-triggered loops from panel/toast DOM changes
+      const mainEl = document.querySelector('main[role="main"]') || document.querySelector("main");
+      let debounceTimer = null;
+      const observer = new MutationObserver(() => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          scanPosts();
+          injectMuteButtons();
+          updateBadgeCount();
+          nudgeScroll();
+        }, 300);
+      });
+      if (mainEl) {
+        observer.observe(mainEl, { childList: true, subtree: true });
+      } else {
+        // Fallback: wait for main to appear, then observe it
+        const bodyObs = new MutationObserver(() => {
+          const m = document.querySelector('main[role="main"]') || document.querySelector("main");
+          if (m) {
+            bodyObs.disconnect();
+            observer.observe(m, { childList: true, subtree: true });
+          }
+        });
+        bodyObs.observe(document.body, { childList: true, subtree: true });
+      }
+    });
+  }
+
+  // Boot immediately if on feed page, otherwise poll for SPA navigation
+  boot();
+  let lastUrl = location.href;
+  setInterval(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      if (isFeedPage()) {
+        if (!initialized) {
+          boot();
+        } else {
+          // Already initialized but navigated back to feed — re-enforce sidebar
+          if (settings.hideSidebar) {
+            document.body.classList.add("lj-hide-sidebar");
+            enforceSidebarHidden();
+          }
+        }
+      } else {
+        // Left the feed page — reset so boot() runs again when returning
+        initialized = false;
+        if (sidebarInterval) clearInterval(sidebarInterval);
+      }
     }
-  });
+  }, 1000);
 })();

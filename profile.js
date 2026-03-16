@@ -2,6 +2,12 @@
 (function () {
   "use strict";
 
+  function isProfilePage() {
+    return location.pathname.startsWith("/in/");
+  }
+
+  let initialized = false;
+
   // === Storage ===
   const DEFAULTS = {
     hideProfileSidebar: true,
@@ -53,13 +59,24 @@
   });
 
   // === Init ===
-  loadSettings(() => {
-    // Apply saved state
-    if (settings.hideProfileSidebar) {
-      document.body.classList.add("lj-hide-profile-sidebar");
-    }
+  function boot() {
+    if (initialized || !isProfilePage()) return;
+    initialized = true;
 
-    // Create mini badge
-    createMiniBadge();
-  });
+    loadSettings(() => {
+      if (settings.hideProfileSidebar) {
+        document.body.classList.add("lj-hide-profile-sidebar");
+      }
+      createMiniBadge();
+    });
+  }
+
+  boot();
+  let lastUrl = location.href;
+  setInterval(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      if (isProfilePage() && !initialized) boot();
+    }
+  }, 1000);
 })();
