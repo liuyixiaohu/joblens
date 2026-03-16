@@ -6,6 +6,14 @@
   // Bail out silently to avoid "Cannot read properties of undefined" errors.
   if (!chrome.runtime?.id) return;
 
+  // Load EB Garamond font (non-blocking <link> instead of CSS @import)
+  if (!document.querySelector('link[href*="EB+Garamond"]')) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;600;700&display=swap";
+    document.head.appendChild(link);
+  }
+
   function isFeedPage() {
     const p = location.pathname;
     return p === "/" || p.startsWith("/feed");
@@ -101,7 +109,7 @@
 
   function detectPostLabels(article) {
     const found = new Set();
-    for (const el of article.querySelectorAll("*")) {
+    for (const el of article.querySelectorAll("span, a, p")) {
       if (el.children.length > 0) continue;
       const t = el.textContent.trim();
       if (POST_TYPE_LABELS.has(t)) found.add(t);
@@ -173,21 +181,21 @@
         const labels = detectPostLabels(article);
         if (labels.has("Promoted")) {
           article.dataset.ljPromoted = "true";
-          incrementStat("adsHidden");
+          if (settings.hidePromoted) incrementStat("adsHidden");
         }
         if (labels.has("Suggested")) {
           article.dataset.ljSuggested = "true";
-          incrementStat("suggestedHidden");
+          if (settings.hideSuggested) incrementStat("suggestedHidden");
         }
         if (labels.has("Recommended for you") || labels.has("Jobs recommended for you") || labels.has("Popular course on LinkedIn Learning")) {
           article.dataset.ljRecommended = "true";
-          incrementStat("recommendedHidden");
+          if (settings.hideRecommended) incrementStat("recommendedHidden");
         }
         const hasFollow = !!article.querySelector('button[aria-label*="Follow"]');
         const hasHeader = !!article.querySelector(".update-components-header");
         if (hasFollow && !hasHeader) {
           article.dataset.ljNonConnection = "true";
-          incrementStat("strangersHidden");
+          if (settings.hideNonConnections) incrementStat("strangersHidden");
         }
       }
       const wasMuted = article.dataset.ljMuted === "true";
@@ -325,7 +333,7 @@
     }
   }
 
-  feedDoc.addEventListener("keydown", (e) => {
+  document.addEventListener("keydown", (e) => {
     if (e.key === "J" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
       // Don't trigger when typing in inputs
       const tag = (e.target.tagName || "").toLowerCase();
@@ -430,6 +438,7 @@
     loadSettings((s) => {
       applyBodyClasses();
       if (s.hideSidebar) enforceSidebarHidden();
+      else cleanupSidebarOverrides();
       rebuildMuteCache();
       scanPosts();
       updateBadgeCount();
@@ -471,6 +480,16 @@
     s.id = "lj-sidebar-style";
     s.textContent = SIDEBAR_SELECTOR_ALL + "{display:none!important}";
     feedDoc.head.appendChild(s);
+  }
+
+  // Remove JS-injected sidebar overrides so the CSS toggle can work
+  function cleanupSidebarOverrides() {
+    if (sidebarInterval) { clearInterval(sidebarInterval); sidebarInterval = null; }
+    const injected = feedDoc.getElementById("lj-sidebar-style");
+    if (injected) injected.remove();
+    feedDoc.querySelectorAll(SIDEBAR_SELECTOR_ALL).forEach((node) => {
+      node.style.removeProperty("display");
+    });
   }
 
   // === Inject feed.css into iframe (extension CSS doesn't load there) ===

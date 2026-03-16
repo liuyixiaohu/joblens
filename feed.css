@@ -1,6 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;600;700&display=swap');
-
 /* === Feed cleanup styles (toggled via body classes) === */
+/* Note: EB Garamond font is loaded via <link> tag in JS, not @import (avoids render blocking) */
 
 /* Hide LinkedIn News sidebar + footer when enabled */
 body.lj-hide-sidebar aside[aria-label="LinkedIn News"],

@@ -844,6 +844,7 @@
     // ---- Dim / Hide filtered cards toggles ----
     function toggleDimCards(on) {
       cardsDimmed = on;
+      saveValue("dimFiltered", on);
       document.querySelectorAll("[data-lj-filtered]").forEach(card => {
         const vis = getVisibleEl(card);
         if (on) vis.classList.add("lj-card-dimmed");
@@ -1226,11 +1227,11 @@
 
     jobsObserver = new MutationObserver(onJobsMutation);
 
-    // Narrow target: jobs list container → <main> → fallback to body
+    // Narrow target: jobs list container → <main> (never body — causes freeze)
     const container =
       document.querySelector(".jobs-search-results-list") ||
-      document.querySelector("main") ||
-      document.body;
+      document.querySelector("main");
+    if (!container) return;
 
     jobsObserver.observe(container, { childList: true, subtree: true });
 
@@ -1244,18 +1245,19 @@
     }
   }
 
-  // Attach observer — use a bootstrap watcher if <main> isn't ready yet
+  // Attach observer — poll if <main> isn't ready yet (avoid body MutationObserver w/ subtree)
   if (document.querySelector("main") || document.querySelector(".jobs-search-results-list")) {
     attachJobsObserver();
   } else {
-    // Fallback: wait for main to appear, then attach narrowed observer
-    const bootObs = new MutationObserver(() => {
+    let bootTicks = 0;
+    const bootPoll = setInterval(() => {
       if (document.querySelector("main") || document.querySelector(".jobs-search-results-list")) {
-        bootObs.disconnect();
+        clearInterval(bootPoll);
         attachJobsObserver();
+      } else if (++bootTicks >= 15) {
+        clearInterval(bootPoll);
       }
-    });
-    bootObs.observe(document.body, { childList: true, subtree: true });
+    }, 500);
   }
 
   // ==================== Popup ↔ Page Sync ====================
