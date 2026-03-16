@@ -1282,6 +1282,12 @@
       unpaidCheckEnabled = data.unpaidCheckEnabled;
       cardsDimmed = data.dimFiltered;
       cardsHidden = data.hideFiltered;
+      // Re-apply dim/hide classes to all filtered cards
+      document.querySelectorAll("[data-lj-filtered]").forEach(card => {
+        const vis = getVisibleEl(card);
+        vis.classList.toggle("lj-card-hidden", cardsHidden);
+        vis.classList.toggle("lj-card-dimmed", !cardsHidden && cardsDimmed);
+      });
       renderLists();
       processedCards = new WeakSet();  // reset so all cards get re-evaluated with new settings
       filterJobCards();
