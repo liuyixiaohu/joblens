@@ -272,51 +272,30 @@ body {
   color: #D9797B;
 }
 
-/* Add row */
-.list-add-row {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
+/* Search row */
+.list-search-row {
+  margin-bottom: 6px;
 }
 
-.list-add-row input {
-  flex: 1;
+.list-search-input {
+  width: 100%;
   background: #fff;
   border: 1px solid #E4DDD2;
   border-radius: 6px;
   color: #1F2328;
-  padding: 6px 10px;
+  padding: 5px 10px;
   font-size: 12px;
   font-family: 'EB Garamond', Garamond, serif;
   outline: none;
-  min-width: 0;
   transition: border-color 0.2s;
 }
 
-.list-add-row input:focus {
+.list-search-input:focus {
   border-color: #D9797B;
 }
 
-.list-add-row input::placeholder {
+.list-search-input::placeholder {
   color: #B5AFA6;
-}
-
-.list-add-row button {
-  background: #1F2328;
-  color: #FAF7F2;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 12px;
-  font-family: 'EB Garamond', Garamond, serif;
-  white-space: nowrap;
-  transition: background 0.2s;
-}
-
-.list-add-row button:hover {
-  background: #D9797B;
 }
 
 /* === Stats Tab === */

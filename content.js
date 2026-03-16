@@ -657,15 +657,6 @@
       // Footer link
       ".lj-feedback{display:block;text-align:center;margin-top:10px;font-size:11px;color:#8A939B;text-decoration:none;letter-spacing:0.3px}",
       ".lj-feedback:hover{color:#5A636B}",
-      // Toggle switch row
-      ".lj-switch-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0}",
-      ".lj-switch-row span{font-size:12px;color:#1F2328}",
-      ".lj-switch{position:relative;width:36px;height:20px;cursor:pointer}",
-      ".lj-switch input{opacity:0;width:0;height:0}",
-      ".lj-switch .slider{position:absolute;inset:0;background:#E4DDD2;border-radius:10px;transition:background 0.2s}",
-      ".lj-switch .slider::before{content:'';position:absolute;width:16px;height:16px;left:2px;top:2px;background:#fff;border-radius:50%;transition:transform 0.2s}",
-      ".lj-switch input:checked+.slider{background:#5a8a6e}",
-      ".lj-switch input:checked+.slider::before{transform:translateX(16px)}",
       // Dimmed / hidden card styles
       ".lj-card-dimmed{opacity:0.35 !important;transition:opacity 0.2s}",
       ".lj-card-hidden{display:none !important}",
@@ -813,70 +804,6 @@
       el("div", { className: "lj-add" }, [titleInput, titleAddBtn]),
     ]);
 
-    // ---- Sponsor detection toggle ----
-    function makeSwitch(label, checked, onChange) {
-      const input = el("input", { type: "checkbox" });
-      input.checked = checked;
-      input.addEventListener("change", () => onChange(input.checked));
-      const slider = el("span", { className: "slider" });
-      const lbl = el("label", { className: "lj-switch" }, [input, slider]);
-      return el("div", { className: "lj-switch-row" }, [
-        el("span", { textContent: label }), lbl
-      ]);
-    }
-
-    const sponsorSwitch = makeSwitch("Detect No Sponsor", sponsorCheckEnabled, (on) => {
-      sponsorCheckEnabled = on;
-      saveValue("sponsorCheckEnabled", on);
-    });
-
-    const unpaidSwitch = makeSwitch("Detect Unpaid", unpaidCheckEnabled, (on) => {
-      unpaidCheckEnabled = on;
-      saveValue("unpaidCheckEnabled", on);
-    });
-
-    // ---- Dim / Hide filtered cards toggles ----
-    function toggleDimCards(on) {
-      cardsDimmed = on;
-      saveValue("dimFiltered", on);
-      document.querySelectorAll("[data-lj-filtered]").forEach(card => {
-        const vis = getVisibleEl(card);
-        if (on) vis.classList.add("lj-card-dimmed");
-        else vis.classList.remove("lj-card-dimmed");
-      });
-    }
-    const dimSwitch = makeSwitch("Dim filtered cards", cardsDimmed, toggleDimCards);
-
-    const hideHint = el("span", {
-      textContent: "(Refresh page to apply)",
-      style: "color:#D9797B;font-size:10px;margin-left:4px;display:none",
-    });
-    function toggleHideCards(on) {
-      cardsHidden = on;
-      saveValue("hideFiltered", on);
-      if (on) {
-        hideHint.style.display = "none";
-        document.querySelectorAll("[data-lj-filtered]").forEach(card => {
-          const vis = getVisibleEl(card);
-          vis.classList.add("lj-card-hidden");
-          vis.classList.remove("lj-card-dimmed");
-        });
-      } else {
-        hideHint.style.display = "inline";
-      }
-    }
-    const hideSwitch = makeSwitch("Hide filtered cards", cardsHidden, toggleHideCards);
-    // Append hint inside the label span, not after the toggle
-    hideSwitch.querySelector("span").appendChild(hideHint);
-
-    const switchSection = el("div", { className: "lj-section" }, [
-      el("div", { className: "lj-label", textContent: "Options" }),
-      sponsorSwitch,
-      unpaidSwitch,
-      dimSwitch,
-      hideSwitch,
-    ]);
-
     const feedbackLink = el("a", {
       className: "lj-feedback",
       textContent: "Shape Sift \u2192",
@@ -886,7 +813,6 @@
 
     body.appendChild(companySection);
     body.appendChild(titleSection);
-    body.appendChild(switchSection);
     body.appendChild(ui.scanBtn);
     body.appendChild(feedbackLink);
     panel.appendChild(header);

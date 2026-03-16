@@ -119,7 +119,7 @@
 
   var LIST_COLLAPSE_THRESHOLD = 5;
 
-  function createListSection(container, label, items, placeholder, onAdd, onRemove) {
+  function createListSection(container, label, items, onRemove) {
     var section = document.createElement("div");
     section.className = "list-section";
 
@@ -135,53 +135,59 @@
     header.appendChild(labelEl);
     header.appendChild(countEl);
 
+    // Search input
+    var searchRow = document.createElement("div");
+    searchRow.className = "list-search-row";
+    var searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.placeholder = "Search to find & remove\u2026";
+    searchInput.className = "list-search-input";
+    searchRow.appendChild(searchInput);
+
     // List container
     var listEl = document.createElement("div");
     listEl.className = "list-items";
 
-    // Add row
-    var addRow = document.createElement("div");
-    addRow.className = "list-add-row";
-    var input = document.createElement("input");
-    input.type = "text";
-    input.placeholder = placeholder;
-    var addBtn = document.createElement("button");
-    addBtn.textContent = "Add";
-    addBtn.addEventListener("click", function () {
-      var raw = input.value.trim();
-      if (!raw) return;
-      onAdd(raw);
-      input.value = "";
-    });
-    input.addEventListener("keypress", function (e) {
-      if (e.key === "Enter") addBtn.click();
-    });
-    addRow.appendChild(input);
-    addRow.appendChild(addBtn);
+    // "Show all" toggle — lives outside the scrollable list
+    var toggleBtn = document.createElement("button");
+    toggleBtn.className = "list-toggle-btn";
+    toggleBtn.style.display = "none";
 
     section.appendChild(header);
+    section.appendChild(searchRow);
     section.appendChild(listEl);
-    section.appendChild(addRow);
+    section.appendChild(toggleBtn);
     container.appendChild(section);
 
-    // Render function
-    function render(currentItems) {
+    var expanded = false;
+    var currentFilter = "";
+
+    function renderItems(currentItems) {
       listEl.innerHTML = "";
       countEl.textContent = currentItems.length > 0 ? currentItems.length + " items" : "";
+
+      // Hide search when list is small
+      searchRow.style.display = currentItems.length > LIST_COLLAPSE_THRESHOLD ? "" : "none";
 
       if (currentItems.length === 0) {
         var empty = document.createElement("div");
         empty.className = "empty-state";
         empty.textContent = "None added yet";
         listEl.appendChild(empty);
+        toggleBtn.style.display = "none";
         return;
       }
 
-      var collapsed = currentItems.length > LIST_COLLAPSE_THRESHOLD;
-      currentItems.forEach(function (item, i) {
+      var filtered = currentFilter
+        ? currentItems.filter(function (item) { return item.toLowerCase().includes(currentFilter); })
+        : currentItems;
+
+      var isCollapsed = !currentFilter && !expanded && filtered.length > LIST_COLLAPSE_THRESHOLD;
+
+      filtered.forEach(function (item, i) {
         var row = document.createElement("div");
         row.className = "list-item";
-        if (collapsed && i >= LIST_COLLAPSE_THRESHOLD) row.style.display = "none";
+        if (isCollapsed && i >= LIST_COLLAPSE_THRESHOLD) row.style.display = "none";
 
         var nameSpan = document.createElement("span");
         nameSpan.textContent = item;
@@ -199,20 +205,32 @@
         listEl.appendChild(row);
       });
 
-      if (collapsed) {
-        var toggle = document.createElement("button");
-        toggle.className = "list-toggle-btn";
-        toggle.textContent = "Show all " + currentItems.length + " items";
-        var expanded = false;
-        toggle.addEventListener("click", function () {
-          expanded = !expanded;
-          listEl.querySelectorAll(".list-item").forEach(function (el, i) {
-            if (i >= LIST_COLLAPSE_THRESHOLD) el.style.display = expanded ? "" : "none";
-          });
-          toggle.textContent = expanded ? "Show less" : "Show all " + currentItems.length + " items";
-        });
-        listEl.appendChild(toggle);
+      // Show/hide toggle button
+      if (!currentFilter && currentItems.length > LIST_COLLAPSE_THRESHOLD) {
+        toggleBtn.style.display = "";
+        toggleBtn.textContent = expanded ? "Show less" : "Show all " + currentItems.length + " items";
+      } else {
+        toggleBtn.style.display = "none";
       }
+    }
+
+    // State for re-render
+    var latestItems = items;
+
+    toggleBtn.addEventListener("click", function () {
+      expanded = !expanded;
+      renderItems(latestItems);
+    });
+
+    searchInput.addEventListener("input", function () {
+      currentFilter = searchInput.value.trim().toLowerCase();
+      expanded = false;
+      renderItems(latestItems);
+    });
+
+    function render(newItems) {
+      latestItems = newItems;
+      renderItems(newItems);
     }
 
     return render;
@@ -224,12 +242,12 @@
     var container = document.getElementById("tab-controls");
     container.innerHTML = "";
 
-    // --- Feed Section ---
+    // --- Feed Controls ---
     var feedGroup = document.createElement("div");
     feedGroup.className = "section-group";
     var feedTitle = document.createElement("div");
     feedTitle.className = "section-title";
-    feedTitle.textContent = "Feed";
+    feedTitle.textContent = "Feed Controls";
     feedGroup.appendChild(feedTitle);
 
     feedGroup.appendChild(createToggle("Hide Ads", settings.hidePromoted, function (v) {
@@ -252,23 +270,7 @@
     }));
 
     // Muted People list
-    var renderPeople = createListSection(feedGroup, "Muted People", settings.mutedPeople, "Name (comma-separated)...", function (raw) {
-      var items = raw.split(/[,\n]+/).map(function (s) { return s.trim(); }).filter(Boolean);
-      var added = 0;
-      items.forEach(function (name) {
-        if (!settings.mutedPeople.some(function (n) { return n.toLowerCase() === name.toLowerCase(); })) {
-          settings.mutedPeople.push(name);
-          added++;
-        }
-      });
-      if (added > 0) {
-        chrome.storage.local.set({ mutedPeople: settings.mutedPeople });
-        renderPeople(settings.mutedPeople);
-        showToast("Muted " + added + " person" + (added > 1 ? "s" : ""));
-      } else {
-        showToast("Already muted");
-      }
-    }, function (name) {
+    var renderPeople = createListSection(feedGroup, "Muted People", settings.mutedPeople, function (name) {
       settings.mutedPeople = settings.mutedPeople.filter(function (n) {
         return n.toLowerCase() !== name.toLowerCase();
       });
@@ -278,23 +280,7 @@
     renderPeople(settings.mutedPeople);
 
     // Muted Keywords list
-    var renderKeywords = createListSection(feedGroup, "Muted Keywords", settings.mutedKeywords, "Keyword...", function (raw) {
-      var items = raw.split(/[,\n]+/).map(function (s) { return s.trim(); }).filter(Boolean);
-      var added = 0;
-      items.forEach(function (kw) {
-        if (!settings.mutedKeywords.some(function (k) { return k.toLowerCase() === kw.toLowerCase(); })) {
-          settings.mutedKeywords.push(kw);
-          added++;
-        }
-      });
-      if (added > 0) {
-        chrome.storage.local.set({ mutedKeywords: settings.mutedKeywords });
-        renderKeywords(settings.mutedKeywords);
-        showToast("Added " + added + " keyword" + (added > 1 ? "s" : ""));
-      } else {
-        showToast("Already added");
-      }
-    }, function (kw) {
+    var renderKeywords = createListSection(feedGroup, "Muted Keywords", settings.mutedKeywords, function (kw) {
       settings.mutedKeywords = settings.mutedKeywords.filter(function (k) {
         return k.toLowerCase() !== kw.toLowerCase();
       });
@@ -305,12 +291,12 @@
 
     container.appendChild(feedGroup);
 
-    // --- Jobs Section ---
+    // --- Jobs Controls ---
     var jobsGroup = document.createElement("div");
     jobsGroup.className = "section-group";
     var jobsTitle = document.createElement("div");
     jobsTitle.className = "section-title";
-    jobsTitle.textContent = "Jobs";
+    jobsTitle.textContent = "Jobs Controls";
     jobsGroup.appendChild(jobsTitle);
 
     jobsGroup.appendChild(createToggle("Detect No Sponsor", settings.sponsorCheckEnabled, function (v) {
@@ -327,23 +313,7 @@
     }));
 
     // Skipped Companies list
-    var renderCompanies = createListSection(jobsGroup, "Skipped Companies", settings.skippedCompanies, "Company (comma-separated)...", function (raw) {
-      var items = raw.split(/[,\n]+/).map(function (s) { return s.trim(); }).filter(Boolean);
-      var added = 0;
-      items.forEach(function (company) {
-        if (!settings.skippedCompanies.some(function (c) { return c.toLowerCase() === company.toLowerCase(); })) {
-          settings.skippedCompanies.push(company);
-          added++;
-        }
-      });
-      if (added > 0) {
-        chrome.storage.local.set({ skippedCompanies: settings.skippedCompanies });
-        renderCompanies(settings.skippedCompanies);
-        showToast("Added " + added + " compan" + (added > 1 ? "ies" : "y"));
-      } else {
-        showToast("Already added");
-      }
-    }, function (company) {
+    var renderCompanies = createListSection(jobsGroup, "Skipped Companies", settings.skippedCompanies, function (company) {
       settings.skippedCompanies = settings.skippedCompanies.filter(function (c) {
         return c.toLowerCase() !== company.toLowerCase();
       });
@@ -353,23 +323,7 @@
     renderCompanies(settings.skippedCompanies);
 
     // Skipped Title Keywords list
-    var renderTitleKw = createListSection(jobsGroup, "Skipped Title Keywords", settings.skippedTitleKeywords, "Title keyword (comma-separated)...", function (raw) {
-      var items = raw.split(/[,\n]+/).map(function (s) { return s.trim(); }).filter(Boolean);
-      var added = 0;
-      items.forEach(function (kw) {
-        if (!settings.skippedTitleKeywords.some(function (k) { return k.toLowerCase() === kw.toLowerCase(); })) {
-          settings.skippedTitleKeywords.push(kw);
-          added++;
-        }
-      });
-      if (added > 0) {
-        chrome.storage.local.set({ skippedTitleKeywords: settings.skippedTitleKeywords });
-        renderTitleKw(settings.skippedTitleKeywords);
-        showToast("Added " + added + " keyword" + (added > 1 ? "s" : ""));
-      } else {
-        showToast("Already added");
-      }
-    }, function (kw) {
+    var renderTitleKw = createListSection(jobsGroup, "Skipped Title Keywords", settings.skippedTitleKeywords, function (kw) {
       settings.skippedTitleKeywords = settings.skippedTitleKeywords.filter(function (k) {
         return k.toLowerCase() !== kw.toLowerCase();
       });
