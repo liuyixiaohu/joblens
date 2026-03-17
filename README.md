@@ -1,10 +1,21 @@
 # Sift
 
-Clean up LinkedIn — filter jobs, hide feed ads & distractions, unfollow with one click, and declutter profile pages.
+Take back a LinkedIn worth your time.
+
+Clean up LinkedIn: filter feed by keywords, hide ads & spam, mute or unfollow inline, and search your rules.
 
 ## Features
 
-### Jobs Page (`/jobs/search/`)
+### Feed (`/feed/`)
+- **Hide Ads** (Promoted posts)
+- **Hide Suggested** posts
+- **Hide Recommended** posts and LinkedIn Learning promotions
+- **Hide Strangers** (non-connection posts)
+- **Hide Sidebar** (LinkedIn News + footer)
+- **Unfollow** — inline button on each post, opens LinkedIn's menu to unfollow the author
+- **Keyboard shortcut** — Shift+J to pause/resume all feed filters
+
+### Job Search (`/jobs/search-results/`)
 - **Reposted** detection (card text + detail panel scan)
 - **Applied** detection (leaf node matching, excludes "Applied Materials" etc.)
 - **No Sponsor** detection (25+ keyword patterns in job descriptions)
@@ -12,21 +23,13 @@ Clean up LinkedIn — filter jobs, hide feed ads & distractions, unfollow with o
 - **Skip Company** list (exact match, case-insensitive, batch paste)
 - **Skip Title Keyword** list (substring match)
 - **Auto-Scan** — click-through scan with detail panel fingerprint detection
-- **Dim filtered cards** toggle (opacity 0.35, hover 0.7)
+- **Dim / Hide filtered cards** toggle
 - Badge persistence across LinkedIn DOM re-renders
 
-### Feed Page (`/feed/`)
-- **Hide Ads** (Promoted posts)
-- **Hide Suggested** posts
-- **Hide Recommended** posts and LinkedIn Learning promotions
-- **Hide Strangers** (non-connection posts)
-- **Hide Sidebar** (LinkedIn News + footer)
-- **Unfollow** — one-click unfollow on interaction headers and author lines
-- Control panel with toggle switches
-
-### Profile Page (`/in/*`)
-- **Hide right sidebar** (ads, "People you may know", recommendations)
-- Separate control panel with toggle
+### Popup
+- **Controls** — toggles grouped by page (Feed / Jobs), skip-list editing with search
+- **Stats** — real-time counters (ads hidden, jobs flagged, etc.) with Today + All Time
+- **Data** — export settings as JSON, import to restore, reset to defaults
 
 ## Install
 
@@ -34,11 +37,11 @@ Clean up LinkedIn — filter jobs, hide feed ads & distractions, unfollow with o
 2. Open `chrome://extensions/`
 3. Enable **Developer mode** (top right)
 4. Click **Load unpacked** and select the folder
-5. Visit LinkedIn — panels appear automatically on jobs, feed, and profile pages
+5. Visit LinkedIn — Sift activates automatically on feed and job search pages
 
 ## Design
 
-Frosted glass panels with cream/rose brand palette and EB Garamond typography. All settings persist across sessions.
+Cream/rose brand palette with EB Garamond typography. All settings persist across sessions via `chrome.storage.local`.
 
 ## Privacy
 
