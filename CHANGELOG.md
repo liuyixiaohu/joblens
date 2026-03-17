@@ -1,11 +1,33 @@
 # Changelog
 
+## v2.0
+
+### Removed
+- **Mute by keyword** — removed in favor of Unfollow (simpler, more effective)
+- **Mute by person** — replaced by one-click Unfollow button
+- **Force Recent** sort toggle
+- **Context menu** ("Mute keyword" right-click option)
+
+### New
+- **Unfollow button** on feed posts — appears on hover, opens LinkedIn's `...` menu to unfollow
+  - On interaction posts ("X reposted this"), placed inline after header text
+  - On direct posts, placed next to author name
+- **Auto-hide unfollow confirmation** — LinkedIn's "You unfollowed X" card collapses automatically
+- **Keyboard shortcut** — Shift+J to pause/resume all feed filters
+
+### Changed
+- Popup section titles renamed: "Feed Page" / "Jobs Page"
+- `contextMenus` permission removed (no longer needed)
+- Description updated for Chrome Web Store v2.0
+
+---
+
 ## v1.4
 
 ### New: Extension Popup Control Center
 - Centralized popup with 3 tabs: Controls, Stats, Data
-- **Controls tab**: All toggles grouped by page (Feed / Jobs / Profile), mute lists, skip lists — full editing
-- **Stats tab**: Real-time counters (ads hidden, posts muted, jobs flagged, etc.) with Today + All Time views
+- **Controls tab**: All toggles grouped by page (Feed / Jobs / Profile), skip lists — full editing
+- **Stats tab**: Real-time counters (ads hidden, jobs flagged, etc.) with Today + All Time views
 - **Data tab**: Export all settings as JSON backup, import to restore, reset to defaults
 - Settings sync via `chrome.storage.onChanged` — changes in popup apply to pages instantly, no reload needed
 
@@ -14,7 +36,6 @@
 - Feed badge: shows "🔍 N filtered" count
 - Jobs badge: shows "🔍 N flagged" count with inline Scan button
 - Profile badge: shows "🔍 Sidebar hidden" status
-- Mute buttons and Scan button remain on-page (require DOM context)
 
 ---
 
@@ -33,19 +54,15 @@
 - `getDetailText()` sibling traversal capped at 15 iterations
 - `refreshBadges()` reduced from 3 calls to 2 (0s + 2s)
 - `filterJobCards()` early-exit when no new cards to process
-- Muted keyword check cached per article via WeakMap (avoids repeated `innerText` reads)
 
 ---
 
 ## v1.2
 
 ### Feed Page
-- Control panel with toggle switches: Hide Ads, Suggested, Recommended, Strangers, Force Recent, Hide Sidebar
-- Mute by person name — "Mute" button appears on hover next to author and interactor names
-- Mute by keyword — hide posts containing specific terms
+- Control panel with toggle switches: Hide Ads, Suggested, Recommended, Strangers, Hide Sidebar
 - Hide LinkedIn Learning promotions ("Popular course on LinkedIn Learning")
 - Hide non-connection (stranger) posts from feed
-- Force Recent sort — automatically switches feed to Recent via sort dropdown
 - Hide LinkedIn News sidebar and footer
 - Persistent settings via chrome.storage.local
 
@@ -56,7 +73,6 @@
 ### Performance
 - Single-pass DOM scanning (5x → 1x traversal per post for label detection)
 - MutationObserver narrowed from document.body to `<main>` element
-- Cached mute lookups via Set (O(1) instead of O(n) per post)
 - Font loading moved from JS runtime to CSS @import (loads at document_start)
 - Targeted selectors in cardHasAppliedText() instead of querySelectorAll("*")
 
@@ -103,7 +119,6 @@ Initial public release.
 - Copy/import for skip lists (comma-separated, batch paste)
 - List collapse: 5+ items show expand/collapse toggle
 - "Skip Current Company" quick action button
-- Feedback link (kunli.co/joblens)
 
 ### Technical
 - jobId extraction supports both `/jobs/view/` and `?currentJobId=` URL formats

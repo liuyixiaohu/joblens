@@ -8,10 +8,7 @@
     hideSuggested: true,
     hideRecommended: true,
     hideNonConnections: false,
-    forceRecent: false,
     hideSidebar: true,
-    mutedPeople: [],
-    mutedKeywords: [],
     sponsorCheckEnabled: true,
     unpaidCheckEnabled: true,
     dimFiltered: false,
@@ -26,7 +23,6 @@
       adsHidden: 0,
       suggestedHidden: 0,
       recommendedHidden: 0,
-      postsMuted: 0,
       strangersHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0,
@@ -35,7 +31,6 @@
       adsHidden: 0,
       suggestedHidden: 0,
       recommendedHidden: 0,
-      postsMuted: 0,
       strangersHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0,
@@ -46,7 +41,6 @@
     adsHidden: "Ads Hidden",
     suggestedHidden: "Suggested Hidden",
     recommendedHidden: "Recommended Hidden",
-    postsMuted: "Posts Muted",
     strangersHidden: "Strangers Hidden",
     jobsFlagged: "Jobs Flagged",
     jobsScanned: "Jobs Scanned",
@@ -247,7 +241,7 @@
     feedGroup.className = "section-group";
     var feedTitle = document.createElement("div");
     feedTitle.className = "section-title";
-    feedTitle.textContent = "Feed Controls";
+    feedTitle.textContent = "Feed Page";
     feedGroup.appendChild(feedTitle);
 
     feedGroup.appendChild(createToggle("Hide Ads", settings.hidePromoted, function (v) {
@@ -262,32 +256,9 @@
     feedGroup.appendChild(createToggle("Hide Strangers", settings.hideNonConnections, function (v) {
       chrome.storage.local.set({ hideNonConnections: v });
     }));
-    feedGroup.appendChild(createToggle("Force Recent", settings.forceRecent, function (v) {
-      chrome.storage.local.set({ forceRecent: v });
-    }));
     feedGroup.appendChild(createToggle("Hide Sidebar", settings.hideSidebar, function (v) {
       chrome.storage.local.set({ hideSidebar: v });
     }));
-
-    // Muted People list
-    var renderPeople = createListSection(feedGroup, "Muted People", settings.mutedPeople, function (name) {
-      settings.mutedPeople = settings.mutedPeople.filter(function (n) {
-        return n.toLowerCase() !== name.toLowerCase();
-      });
-      chrome.storage.local.set({ mutedPeople: settings.mutedPeople });
-      renderPeople(settings.mutedPeople);
-    });
-    renderPeople(settings.mutedPeople);
-
-    // Muted Keywords list
-    var renderKeywords = createListSection(feedGroup, "Muted Keywords", settings.mutedKeywords, function (kw) {
-      settings.mutedKeywords = settings.mutedKeywords.filter(function (k) {
-        return k.toLowerCase() !== kw.toLowerCase();
-      });
-      chrome.storage.local.set({ mutedKeywords: settings.mutedKeywords });
-      renderKeywords(settings.mutedKeywords);
-    });
-    renderKeywords(settings.mutedKeywords);
 
     container.appendChild(feedGroup);
 
@@ -296,7 +267,7 @@
     jobsGroup.className = "section-group";
     var jobsTitle = document.createElement("div");
     jobsTitle.className = "section-title";
-    jobsTitle.textContent = "Jobs Controls";
+    jobsTitle.textContent = "Jobs Page";
     jobsGroup.appendChild(jobsTitle);
 
     jobsGroup.appendChild(createToggle("Detect No Sponsor", settings.sponsorCheckEnabled, function (v) {

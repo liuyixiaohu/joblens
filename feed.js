@@ -1,4 +1,4 @@
-// Sift Feed: filter posts, hide sidebar, mute people/keywords, SPA/iframe-aware
+// Sift Feed: filter posts, hide sidebar, unfollow, SPA/iframe-aware
 (function () {
   "use strict";
 
@@ -44,10 +44,7 @@
     hideSuggested: true,
     hideRecommended: true,
     hideNonConnections: false,
-    forceRecent: false,
     hideSidebar: true,
-    mutedPeople: [],
-    mutedKeywords: [],
   };
   const SETTING_KEYS = new Set(Object.keys(DEFAULTS));
   let settings = { ...DEFAULTS };
@@ -57,29 +54,6 @@
       settings = s;
       cb(s);
     });
-  }
-
-  function saveList(key) {
-    chrome.storage.local.set({ [key]: settings[key] });
-  }
-
-  // === Name extraction from feed posts ===
-
-  // Post author: from "Open control menu for post by NAME"
-  function getPostAuthor(article) {
-    const btn = article.querySelector('button[aria-label*="control menu for post by"]');
-    if (!btn) return null;
-    const match = btn.getAttribute("aria-label").match(/post by (.+)/i);
-    return match ? match[1].trim() : null;
-  }
-
-  // Interaction person: "Jane likes this" / "John commented on this"
-  function getInteractor(article) {
-    const header = article.querySelector(".update-components-header");
-    if (!header) return null;
-    const text = header.textContent.trim();
-    const match = text.match(/^(.+?)\s+(likes?|commented|reposted|loves?|celebrates?|supports?|finds? funny)\b/i);
-    return match ? match[1].trim() : null;
   }
 
   // === Scroll nudge: trigger LinkedIn's infinite scroll to fill gaps ===
@@ -93,14 +67,6 @@
   }
 
   // === Filtering logic ===
-
-  let mutedPeopleSet = new Set();
-  let mutedKeywordsLower = [];
-
-  function rebuildMuteCache() {
-    mutedPeopleSet = new Set(settings.mutedPeople.map((n) => n.toLowerCase()));
-    mutedKeywordsLower = settings.mutedKeywords.map((k) => k.toLowerCase());
-  }
 
   const POST_TYPE_LABELS = new Set([
     "Promoted", "Suggested", "Recommended for you",
@@ -117,28 +83,6 @@
     return found;
   }
 
-  function isMutedByPerson(article) {
-    if (mutedPeopleSet.size === 0) return false;
-    const author = getPostAuthor(article);
-    const interactor = getInteractor(article);
-    return (author && mutedPeopleSet.has(author.toLowerCase())) ||
-           (interactor && mutedPeopleSet.has(interactor.toLowerCase())) || false;
-  }
-
-  // textContent avoids layout reflow (unlike innerText). Cache may go stale
-  // if LinkedIn expands "see more" — acceptable tradeoff for scan perf.
-  const articleTextCache = new WeakMap();
-
-  function isMutedByKeyword(article) {
-    if (mutedKeywordsLower.length === 0) return false;
-    let text = articleTextCache.get(article);
-    if (text === undefined) {
-      text = article.textContent.toLowerCase();
-      articleTextCache.set(article, text);
-    }
-    return mutedKeywordsLower.some((kw) => text.includes(kw));
-  }
-
   // === Stats counter (batched to avoid per-post storage I/O) ===
   let pendingStats = {};
 
@@ -151,12 +95,12 @@
     pendingStats = {};
     if (Object.keys(batch).length === 0) return;
     chrome.storage.local.get({
-      stats: { today: "", adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 },
-      statsAllTime: { adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 },
+      stats: { today: "", adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 },
+      statsAllTime: { adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 },
     }, (data) => {
       const today = new Date().toISOString().slice(0, 10);
       if (data.stats.today !== today) {
-        data.stats = { today, adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, postsMuted: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 };
+        data.stats = { today, adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 };
       }
       for (const [key, count] of Object.entries(batch)) {
         data.stats[key] = (data.stats[key] || 0) + count;
@@ -198,136 +142,74 @@
           if (settings.hideNonConnections) incrementStat("strangersHidden");
         }
       }
-      const wasMuted = article.dataset.ljMuted === "true";
-      if (isMutedByPerson(article) || isMutedByKeyword(article)) {
-        if (!wasMuted) incrementStat("postsMuted");
-        article.dataset.ljMuted = "true";
-      } else {
-        delete article.dataset.ljMuted;
-      }
     }
     flushStats();
   }
 
-  // === Force Recent sort ===
-
-  function switchToRecent() {
-    const svg = feedDoc.querySelector('[aria-label="Sort order dropdown button"]');
-    const sortBtn = svg && svg.closest("button");
-    if (!sortBtn) return;
-    if (sortBtn.textContent.replace(/\s+/g, " ").includes("Recent")) return;
-    sortBtn.click();
-    setTimeout(() => {
-      const items = feedDoc.querySelectorAll(".artdeco-dropdown__item");
-      for (const item of items) {
-        if (item.textContent.trim() === "Recent") { item.click(); break; }
-      }
-    }, 200);
-  }
-
-  // === Mute button injection on posts ===
-
-  function makeMuteBtn(name) {
-    const btn = feedDoc.createElement("button");
-    btn.className = "lj-mute-btn";
-    btn.title = "Mute " + name;
-    btn.textContent = "Mute";
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      addMutedPerson(name);
-    });
-    return btn;
-  }
+  // === Unfollow button injection on posts ===
 
   function makeUnfollowBtn(article) {
     const btn = feedDoc.createElement("button");
-    btn.className = "lj-mute-btn";
+    btn.className = "lj-unfollow-btn";
     btn.title = "Open menu to unfollow";
     btn.textContent = "Unfollow";
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
-      openPostMenu(article);
+      const menuBtn = article.querySelector('button[aria-label*="control menu"]');
+      if (menuBtn) {
+        menuBtn.click();
+        watchForUnfollowConfirmation(article);
+      }
     });
     return btn;
   }
 
-  function injectMuteBtnInto(container, name, article) {
-    if (!container) return;
-    Object.assign(container.style, { display: "flex", alignItems: "center", gap: "6px" });
-    container.appendChild(makeMuteBtn(name));
-    container.appendChild(makeUnfollowBtn(article));
+  // After user clicks Unfollow from LinkedIn's dropdown menu, LinkedIn shows
+  // an inline confirmation card ("You unfollowed X"). Auto-collapse it after
+  // a brief moment so it doesn't clutter the feed.
+  function watchForUnfollowConfirmation(article) {
+    let checks = 0;
+    const interval = setInterval(() => {
+      if (++checks > 20) { clearInterval(interval); return; }
+      // LinkedIn replaces the post content with "You unfollowed ..."
+      if (article.textContent.includes("You unfollowed")) {
+        clearInterval(interval);
+        setTimeout(() => {
+          article.style.maxHeight = "0";
+          article.style.overflow = "hidden";
+          article.style.opacity = "0";
+          article.style.padding = "0";
+          article.style.margin = "0";
+          article.style.transition = "max-height 0.3s, opacity 0.2s, padding 0.3s, margin 0.3s";
+        }, 1200);
+      }
+    }, 500);
   }
 
-  function injectMuteButtons() {
+  function injectUnfollowButtons() {
     const main = feedMain();
     if (!main) return;
     for (const article of main.querySelectorAll('[role="article"]')) {
-      if (article.dataset.ljMuteBtnAdded) continue;
-      article.dataset.ljMuteBtnAdded = "1";
-      const author = getPostAuthor(article);
-      if (author) injectMuteBtnInto(article.querySelector(".update-components-actor__title"), author, article);
-      const interactor = getInteractor(article);
-      if (interactor) injectMuteBtnInto(article.querySelector(".update-components-header"), interactor, article);
-    }
-  }
-
-  // Open the post's "..." menu so the user can click Unfollow themselves
-  function openPostMenu(article) {
-    if (!article) return;
-    const menuBtn = article.querySelector('button[aria-label*="control menu"]');
-    if (menuBtn) menuBtn.click();
-  }
-
-  function addMutedPerson(name) {
-    if (settings.mutedPeople.some((n) => n.toLowerCase() === name.toLowerCase())) return;
-    settings.mutedPeople.push(name);
-    saveList("mutedPeople");
-    rebuildMuteCache();
-    scanPosts();
-    nudgeScroll();
-    showToast("Muted " + name, () => removeMutedPerson(name));
-  }
-
-  function removeMutedPerson(name) {
-    settings.mutedPeople = settings.mutedPeople.filter((n) => n.toLowerCase() !== name.toLowerCase());
-    saveList("mutedPeople");
-    rebuildMuteCache();
-    scanPosts();
-  }
-
-  function addMutedKeyword(raw) {
-    const items = raw.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean);
-    let added = 0;
-    for (const kw of items) {
-      if (!settings.mutedKeywords.some((k) => k.toLowerCase() === kw.toLowerCase())) {
-        settings.mutedKeywords.push(kw);
-        added++;
+      if (article.dataset.ljUnfollowAdded) continue;
+      article.dataset.ljUnfollowAdded = "1";
+      const header = article.querySelector(".update-components-header");
+      if (header) {
+        // Interaction post ("X likes this") — the ... menu unfollows the
+        // interactor, so place the button right after the name link.
+        // Append after all text content (e.g. "Paras Dhillon reposted this [Unfollow]")
+        const lastText = header.querySelector("span:last-of-type") || header.querySelector("a");
+        if (lastText) lastText.insertAdjacentElement("afterend", makeUnfollowBtn(article));
+      } else {
+        // Direct post — the ... menu unfollows the author.
+        const actor = article.querySelector(".update-components-actor__title");
+        if (actor) {
+          Object.assign(actor.style, { display: "flex", alignItems: "center", gap: "6px" });
+          actor.appendChild(makeUnfollowBtn(article));
+        }
       }
     }
-    if (added > 0) {
-      saveList("mutedKeywords");
-      rebuildMuteCache();
-      scanPosts();
-      nudgeScroll();
-      showToast(added === 1 ? "Added keyword" : "Added " + added + " keywords");
-    }
   }
-
-  function removeMutedKeyword(kw) {
-    settings.mutedKeywords = settings.mutedKeywords.filter((k) => k.toLowerCase() !== kw.toLowerCase());
-    saveList("mutedKeywords");
-    rebuildMuteCache();
-    scanPosts();
-  }
-
-  // === Context menu message handler ===
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type !== "lj-context-menu" || !isFeedPage()) return;
-    if (msg.action === "mutePerson") addMutedPerson(msg.text);
-    else if (msg.action === "muteKeyword") addMutedKeyword(msg.text);
-  });
 
   // === Keyboard shortcut: Shift+J to pause/resume feed filters ===
   let feedPaused = false;
@@ -339,16 +221,9 @@
         "lj-hide-promoted", "lj-hide-suggested",
         "lj-hide-recommended", "lj-hide-non-connections", "lj-hide-sidebar"
       );
-      // Un-mute all posts temporarily
-      for (const el of feedDoc.querySelectorAll('[data-lj-muted="true"]')) {
-        el.dataset.ljMuted = "paused";
-      }
       showToast("Filters paused (Shift+J to resume)");
     } else {
       applyBodyClasses();
-      for (const el of feedDoc.querySelectorAll('[data-lj-muted="paused"]')) {
-        el.dataset.ljMuted = "true";
-      }
       scanPosts();
       showToast("Filters resumed");
     }
@@ -428,7 +303,6 @@
       Suggested: feedDoc.querySelectorAll('[data-lj-suggested="true"]').length,
       Recommended: feedDoc.querySelectorAll('[data-lj-recommended="true"]').length,
       Strangers: feedDoc.querySelectorAll('[data-lj-non-connection="true"]').length,
-      Muted: feedDoc.querySelectorAll('[data-lj-muted="true"]').length,
     };
     const lines = Object.entries(counts).filter(([, v]) => v > 0).map(([k, v]) => v + " " + k);
     tip.textContent = lines.length > 0 ? lines.join("\n") : "Nothing filtered yet";
@@ -437,7 +311,7 @@
   function updateBadgeCount() {
     const badge = feedDoc.getElementById("lj-mini-badge");
     if (!badge) return;
-    const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-muted="true"]').length;
+    const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"]').length;
     badge.textContent = count > 0 ? "\uD83D\uDD0D " + count + " filtered" : "\uD83D\uDD0D Sift";
     // Also update breakdown if visible
     const tip = feedDoc.getElementById("lj-badge-tip");
@@ -460,10 +334,8 @@
       applyBodyClasses();
       if (s.hideSidebar) enforceSidebarHidden();
       else cleanupSidebarOverrides();
-      rebuildMuteCache();
       scanPosts();
       updateBadgeCount();
-      if (s.forceRecent) switchToRecent();
     });
   });
 
@@ -544,7 +416,7 @@
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         scanPosts();
-        injectMuteButtons();
+        injectUnfollowButtons();
         updateBadgeCount();
         nudgeScroll();
       }, 300);
@@ -562,7 +434,7 @@
           clearInterval(mainPollInterval);
           feedObserver.observe(m, { childList: true, subtree: true });
           scanPosts();
-          injectMuteButtons();
+          injectUnfollowButtons();
           updateBadgeCount();
         }
         if (++retries >= 15) clearInterval(mainPollInterval);
@@ -577,11 +449,10 @@
     applyBodyClasses();
     if (settings.hideSidebar) { injectSidebarStyle(); enforceSidebarHidden(); }
     scanPosts();
-    injectMuteButtons();
+    injectUnfollowButtons();
     createMiniBadge();
     updateBadgeCount();
     setupObserver();
-    if (settings.forceRecent) switchToRecent();
   }
 
   // === Init ===
@@ -590,7 +461,6 @@
     initialized = true;
 
     loadSettings(() => {
-      rebuildMuteCache();
       reapply();
       // Iframe may not be ready yet on initial load — poll for it
       startIframeCheck();

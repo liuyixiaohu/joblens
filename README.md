@@ -1,6 +1,6 @@
-# JobLens
+# Sift
 
-Clean up LinkedIn — filter jobs, hide feed ads & distractions, mute people & keywords, and declutter profile pages.
+Clean up LinkedIn — filter jobs, hide feed ads & distractions, unfollow with one click, and declutter profile pages.
 
 ## Features
 
@@ -20,11 +20,9 @@ Clean up LinkedIn — filter jobs, hide feed ads & distractions, mute people & k
 - **Hide Suggested** posts
 - **Hide Recommended** posts and LinkedIn Learning promotions
 - **Hide Strangers** (non-connection posts)
-- **Force Recent** sort automatically
 - **Hide Sidebar** (LinkedIn News + footer)
-- **Mute by person** — click "Mute" next to any name
-- **Mute by keyword** — hide posts containing specific terms
-- Control panel with toggle switches and mute lists
+- **Unfollow** — one-click unfollow on interaction headers and author lines
+- Control panel with toggle switches
 
 ### Profile Page (`/in/*`)
 - **Hide right sidebar** (ads, "People you may know", recommendations)
@@ -35,7 +33,7 @@ Clean up LinkedIn — filter jobs, hide feed ads & distractions, mute people & k
 1. Download or clone this repo
 2. Open `chrome://extensions/`
 3. Enable **Developer mode** (top right)
-4. Click **Load unpacked** and select the `joblens` folder
+4. Click **Load unpacked** and select the folder
 5. Visit LinkedIn — panels appear automatically on jobs, feed, and profile pages
 
 ## Design
@@ -44,8 +42,8 @@ Frosted glass panels with cream/rose brand palette and EB Garamond typography. A
 
 ## Privacy
 
-JobLens runs entirely in your browser. No data is collected or sent anywhere. See [privacy.html](privacy.html) for the full policy.
+Sift runs entirely in your browser. No data is collected or sent anywhere. See [privacy.html](privacy.html) for the full policy.
 
 ## Feedback
 
-[Shape JobLens](https://kunli.co/joblens)
+[Shape Sift](https://kunli.co/sift)
