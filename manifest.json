@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Sift",
-  "version": "2.0",
-  "description": "Clean up LinkedIn: filter jobs, hide feed ads & distractions, unfollow with one click.",
+  "version": "2.1",
+  "description": "Clean up LinkedIn: filter feed by keywords, hide ads & spam, mute or unfollow inline, and search your rules.",
   "permissions": ["storage"],
   "background": {
     "service_worker": "background.js"
