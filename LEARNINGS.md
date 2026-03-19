@@ -334,4 +334,42 @@ Chinese for comments, English for code/technical terms。
 
 ### Google Fonts 外部请求是品牌设计决策
 
-EB Garamond 是 JobLens 品牌字体，从 Google Fonts 加载。CSP 问题由 LinkedIn 页面的宽松策略覆盖（LinkedIn 自身也用外部 CDN）。
+EB Garamond 是 Sift 品牌字体，从 Google Fonts 加载。CSP 问题由 LinkedIn 页面的宽松策略覆盖（LinkedIn 自身也用外部 CDN）。v2.2 起由 `content.js` 统一加载，`feed.js` 不再重复注入。
+
+### `labeledJobs` Map 不是内存泄漏
+
+Map 在路由切换时清空（`routeChange` → `labeledJobs.clear()`）。在 jobs 搜索会话中增长，但受限于 LinkedIn 单次加载的 job 数量（通常数百条）。Map 用 jobId 做 key 是跨虚拟列表持久化的唯一可靠方式（§4, §12）。
+
+### feed.js 和 content.js 各自独立 URL 轮询是正确的
+
+两个脚本负责不同的 LinkedIn 页面（feed vs jobs），各自维护独立的初始化状态和清理逻辑。合并轮询会增加耦合，收益不大。
+
+### 侧边栏三套隐藏机制是防御性设计
+
+CSS class（`lj-hide-sidebar`）是主机制，`<style>` 注入是 `!important` 强制层，JS 轮询 inline style 是异步渲染的 fallback。LinkedIn 的渐进式渲染（§1）意味着侧边栏可能在 CSS class 生效后才出现。
+
+---
+
+## 17. v2.2 代码质量改进记录
+
+> v2.2 根据全面代码审计进行了以下工程改进。
+
+### SPA 导航重新初始化修复
+
+`boot()` 中 `initialized` 曾在 `loadSettings` 异步回调之前同步设为 `true`，导致 URL 轮询在设置加载完成前走错分支。修复：添加 `booting` 状态守卫，拆分 `reapply()` 为 `applyShell()`（不需要 `<main>`）和 `applyFeed()`（需要 `<main>`），使 UI shell 立即可见，feed 功能等 `<main>` 渲染后再激活。
+
+### 共享默认值统一管理
+
+`defaults.js` 作为单一数据源，通过 manifest 和 popup.html 加载。`feed.js`、`content.js`、`popup.js` 不再各自硬编码默认值。
+
+### content.js 统计批处理
+
+从每次 `incrementStat` 立即写入 `chrome.storage.local`，改为 500ms 防抖批量写入（与 `feed.js` 的 `flushStats` 模式一致）。
+
+### DevTools 快捷键冲突
+
+Jobs 面板快捷键从 `Ctrl/Cmd+Shift+J` 改为 `Ctrl/Cmd+Shift+S`，避免与 Chrome DevTools Console 冲突。
+
+### feed.js 常量提取
+
+所有轮询间隔、最大重试次数、防抖时间等魔法数字提取为文件顶部的命名常量，便于调优和理解。
