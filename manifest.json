@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sift",
-  "version": "2.1",
+  "version": "2.2",
   "description": "Clean up LinkedIn: filter feed by keywords, hide ads & spam, mute or unfollow inline, and search your rules.",
   "permissions": ["storage"],
   "background": {
