@@ -7,6 +7,8 @@
     hideRecommended: true,
     hideNonConnections: false,
     hideSidebar: true,
+    feedKeywordFilterEnabled: true,
+    feedKeywords: [],
     // Jobs page
     sponsorCheckEnabled: true,
     unpaidCheckEnabled: true,
@@ -22,6 +24,7 @@
       suggestedHidden: 0,
       recommendedHidden: 0,
       strangersHidden: 0,
+      keywordsHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0
     },
@@ -30,10 +33,21 @@
       suggestedHidden: 0,
       recommendedHidden: 0,
       strangersHidden: 0,
+      keywordsHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0
     }
   };
+
+  // src/shared/matching.js
+  function matchesFeedKeyword(text, keywords) {
+    if (!keywords || keywords.length === 0) return null;
+    const lower = text.toLowerCase();
+    for (const kw of keywords) {
+      if (kw && lower.includes(kw.toLowerCase())) return kw;
+    }
+    return null;
+  }
 
   // src/feed.js
   if (chrome.runtime?.id) {
@@ -85,7 +99,7 @@
       chrome.storage.local.get(statsDefaults, (data) => {
         const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
         if (data.stats.today !== today) {
-          data.stats = { today, adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 };
+          data.stats = { ...SIFT_STATS_DEFAULTS.stats, today };
         }
         for (const [key, count] of Object.entries(batch)) {
           data.stats[key] = (data.stats[key] || 0) + count;
@@ -123,8 +137,25 @@
             if (settings.hideNonConnections) incrementStat("strangersHidden");
           }
         }
+        if (settings.feedKeywordFilterEnabled && settings.feedKeywords && settings.feedKeywords.length > 0) {
+          if (!article.dataset.ljKeywordChecked) {
+            article.dataset.ljKeywordChecked = "1";
+            const matched = matchesFeedKeyword(article.textContent, settings.feedKeywords);
+            if (matched) {
+              article.dataset.ljKeywordFiltered = "true";
+              incrementStat("keywordsHidden");
+            }
+          }
+        }
       }
       flushStats();
+    }, clearKeywordMarks = function() {
+      const main = feedMain();
+      if (!main) return;
+      for (const article of main.querySelectorAll('[role="article"]')) {
+        delete article.dataset.ljKeywordChecked;
+        delete article.dataset.ljKeywordFiltered;
+      }
     }, makeUnfollowBtn = function(article) {
       const btn = feedDoc.createElement("button");
       btn.className = "lj-unfollow-btn";
@@ -185,7 +216,8 @@
           "lj-hide-suggested",
           "lj-hide-recommended",
           "lj-hide-non-connections",
-          "lj-hide-sidebar"
+          "lj-hide-sidebar",
+          "lj-hide-keyword-filtered"
         );
         showToast("Filters paused (Shift+J to resume)");
       } else {
@@ -242,14 +274,15 @@
         Ads: feedDoc.querySelectorAll('[data-lj-promoted="true"]').length,
         Suggested: feedDoc.querySelectorAll('[data-lj-suggested="true"]').length,
         Recommended: feedDoc.querySelectorAll('[data-lj-recommended="true"]').length,
-        Strangers: feedDoc.querySelectorAll('[data-lj-non-connection="true"]').length
+        Strangers: feedDoc.querySelectorAll('[data-lj-non-connection="true"]').length,
+        Keywords: feedDoc.querySelectorAll('[data-lj-keyword-filtered="true"]').length
       };
       const lines = Object.entries(counts).filter(([, v]) => v > 0).map(([k, v]) => v + " " + k);
       tip.textContent = lines.length > 0 ? lines.join("\n") : "Nothing filtered yet";
     }, updateBadgeCount = function() {
       const badge = feedDoc.getElementById("lj-mini-badge");
       if (!badge) return;
-      const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"]').length;
+      const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-keyword-filtered="true"]').length;
       badge.textContent = count > 0 ? "\u{1F50D} " + count + " filtered" : "\u{1F50D} Sift";
       const tip = feedDoc.getElementById("lj-badge-tip");
       if (tip && tip.classList.contains("visible")) updateBreakdown();
@@ -259,6 +292,7 @@
       feedDoc.body.classList.toggle("lj-hide-recommended", settings.hideRecommended);
       feedDoc.body.classList.toggle("lj-hide-non-connections", settings.hideNonConnections);
       feedDoc.body.classList.toggle("lj-hide-sidebar", settings.hideSidebar);
+      feedDoc.body.classList.toggle("lj-hide-keyword-filtered", settings.feedKeywordFilterEnabled);
     }, hideSidebarElements = function() {
       feedDoc.querySelectorAll(SIDEBAR_SELECTOR_ALL).forEach((node) => {
         node.style.display = "none";
@@ -388,7 +422,7 @@
     let initialized = false;
     let feedDoc = document;
     const DEFAULTS = SIFT_DEFAULTS;
-    const SETTING_KEYS = /* @__PURE__ */ new Set(["hidePromoted", "hideSuggested", "hideRecommended", "hideNonConnections", "hideSidebar"]);
+    const SETTING_KEYS = /* @__PURE__ */ new Set(["hidePromoted", "hideSuggested", "hideRecommended", "hideNonConnections", "hideSidebar", "feedKeywordFilterEnabled", "feedKeywords"]);
     let settings = { ...DEFAULTS };
     let nudgeTimer = null;
     const POST_TYPE_LABELS = /* @__PURE__ */ new Set([
@@ -412,6 +446,9 @@
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
       if (!Object.keys(changes).some((k) => SETTING_KEYS.has(k))) return;
+      if ("feedKeywords" in changes || "feedKeywordFilterEnabled" in changes) {
+        clearKeywordMarks();
+      }
       loadSettings((s) => {
         applyBodyClasses();
         if (s.hideSidebar) enforceSidebarHidden();

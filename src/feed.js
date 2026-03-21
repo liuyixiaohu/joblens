@@ -1,4 +1,5 @@
 import { SIFT_DEFAULTS, SIFT_STATS_DEFAULTS } from "./shared/defaults.js";
+import { matchesFeedKeyword } from "./shared/matching.js";
 
 if (chrome.runtime?.id) {
   "use strict";
@@ -45,7 +46,7 @@ if (chrome.runtime?.id) {
 
   // === Storage ===
   const DEFAULTS = SIFT_DEFAULTS;
-  const SETTING_KEYS = new Set(["hidePromoted", "hideSuggested", "hideRecommended", "hideNonConnections", "hideSidebar"]);
+  const SETTING_KEYS = new Set(["hidePromoted", "hideSuggested", "hideRecommended", "hideNonConnections", "hideSidebar", "feedKeywordFilterEnabled", "feedKeywords"]);
   let settings = { ...DEFAULTS };
 
   function loadSettings(cb) {
@@ -101,7 +102,7 @@ if (chrome.runtime?.id) {
     chrome.storage.local.get(statsDefaults, (data) => {
       const today = new Date().toISOString().slice(0, 10);
       if (data.stats.today !== today) {
-        data.stats = { today, adsHidden: 0, suggestedHidden: 0, recommendedHidden: 0, strangersHidden: 0, jobsFlagged: 0, jobsScanned: 0 };
+        data.stats = { ...SIFT_STATS_DEFAULTS.stats, today };
       }
       for (const [key, count] of Object.entries(batch)) {
         data.stats[key] = (data.stats[key] || 0) + count;
@@ -145,8 +146,31 @@ if (chrome.runtime?.id) {
           if (settings.hideNonConnections) incrementStat("strangersHidden");
         }
       }
+
+      // Keyword filter — checked separately because keywords can be added/removed,
+      // requiring re-evaluation (unlike immutable type labels above).
+      if (settings.feedKeywordFilterEnabled && settings.feedKeywords && settings.feedKeywords.length > 0) {
+        if (!article.dataset.ljKeywordChecked) {
+          article.dataset.ljKeywordChecked = "1";
+          const matched = matchesFeedKeyword(article.textContent, settings.feedKeywords);
+          if (matched) {
+            article.dataset.ljKeywordFiltered = "true";
+            incrementStat("keywordsHidden");
+          }
+        }
+      }
     }
     flushStats();
+  }
+
+  // Clear keyword marks on all articles (called when keyword list changes)
+  function clearKeywordMarks() {
+    const main = feedMain();
+    if (!main) return;
+    for (const article of main.querySelectorAll('[role="article"]')) {
+      delete article.dataset.ljKeywordChecked;
+      delete article.dataset.ljKeywordFiltered;
+    }
   }
 
   // === Unfollow button injection on posts ===
@@ -222,7 +246,8 @@ if (chrome.runtime?.id) {
     if (feedPaused) {
       feedDoc.body.classList.remove(
         "lj-hide-promoted", "lj-hide-suggested",
-        "lj-hide-recommended", "lj-hide-non-connections", "lj-hide-sidebar"
+        "lj-hide-recommended", "lj-hide-non-connections", "lj-hide-sidebar",
+        "lj-hide-keyword-filtered"
       );
       showToast("Filters paused (Shift+J to resume)");
     } else {
@@ -306,6 +331,7 @@ if (chrome.runtime?.id) {
       Suggested: feedDoc.querySelectorAll('[data-lj-suggested="true"]').length,
       Recommended: feedDoc.querySelectorAll('[data-lj-recommended="true"]').length,
       Strangers: feedDoc.querySelectorAll('[data-lj-non-connection="true"]').length,
+      Keywords: feedDoc.querySelectorAll('[data-lj-keyword-filtered="true"]').length,
     };
     const lines = Object.entries(counts).filter(([, v]) => v > 0).map(([k, v]) => v + " " + k);
     tip.textContent = lines.length > 0 ? lines.join("\n") : "Nothing filtered yet";
@@ -314,7 +340,7 @@ if (chrome.runtime?.id) {
   function updateBadgeCount() {
     const badge = feedDoc.getElementById("lj-mini-badge");
     if (!badge) return;
-    const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"]').length;
+    const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-keyword-filtered="true"]').length;
     badge.textContent = count > 0 ? "\uD83D\uDD0D " + count + " filtered" : "\uD83D\uDD0D Sift";
     // Also update breakdown if visible
     const tip = feedDoc.getElementById("lj-badge-tip");
@@ -327,12 +353,17 @@ if (chrome.runtime?.id) {
     feedDoc.body.classList.toggle("lj-hide-recommended", settings.hideRecommended);
     feedDoc.body.classList.toggle("lj-hide-non-connections", settings.hideNonConnections);
     feedDoc.body.classList.toggle("lj-hide-sidebar", settings.hideSidebar);
+    feedDoc.body.classList.toggle("lj-hide-keyword-filtered", settings.feedKeywordFilterEnabled);
   }
 
   // Only re-scan when actual settings change, not stats writes
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (!Object.keys(changes).some((k) => SETTING_KEYS.has(k))) return;
+    // Keyword list changed — clear marks so posts get re-evaluated
+    if ("feedKeywords" in changes || "feedKeywordFilterEnabled" in changes) {
+      clearKeywordMarks();
+    }
     loadSettings((s) => {
       applyBodyClasses();
       if (s.hideSidebar) enforceSidebarHidden();
