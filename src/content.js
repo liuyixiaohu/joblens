@@ -1,5 +1,6 @@
 import { SIFT_DEFAULTS } from "./shared/defaults.js";
 import { keywordsToRegex } from "./shared/matching.js";
+import { sendBadgeCount } from "./shared/badge.js";
 
 if (chrome.runtime?.id && !window.__ljContentLoaded) {
   window.__ljContentLoaded = true;
@@ -538,6 +539,10 @@ if (chrome.runtime?.id && !window.__ljContentLoaded) {
 
       if (cardHasRepostedText(card)) labelCard(card, "reposted");
     });
+
+    // Update extension icon badge with flagged count
+    const flagged = document.querySelectorAll("[data-lj-reasons]").length;
+    sendBadgeCount(flagged);
   }
 
   // ==================== Check Detail Panel Content, Label Specified Card ====================
@@ -1123,6 +1128,7 @@ if (chrome.runtime?.id && !window.__ljContentLoaded) {
       // Left search page → remove panel
       const panel = document.getElementById("lj-filter-panel");
       if (panel) panel.remove();
+      sendBadgeCount(0);
     }
   }
 

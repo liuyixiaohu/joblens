@@ -49,6 +49,14 @@
     return null;
   }
 
+  // src/shared/badge.js
+  function sendBadgeCount(count) {
+    try {
+      chrome.runtime.sendMessage({ type: "updateBadge", count });
+    } catch (e) {
+    }
+  }
+
   // src/feed.js
   if (chrome.runtime?.id) {
     let isFeedPage = function() {
@@ -286,6 +294,7 @@
       badge.textContent = count > 0 ? "\u{1F50D} " + count + " filtered" : "\u{1F50D} Sift";
       const tip = feedDoc.getElementById("lj-badge-tip");
       if (tip && tip.classList.contains("visible")) updateBreakdown();
+      sendBadgeCount(count);
     }, applyBodyClasses = function() {
       feedDoc.body.classList.toggle("lj-hide-promoted", settings.hidePromoted);
       feedDoc.body.classList.toggle("lj-hide-suggested", settings.hideSuggested);
@@ -404,6 +413,25 @@
         }
         if (++ticks >= IFRAME_POLL_MAX_TICKS) clearInterval(iframeCheckInterval);
       }, IFRAME_POLL_INTERVAL_MS);
+    }, handleFeedRouteChange = function() {
+      if (location.href === lastUrl) return;
+      lastUrl = location.href;
+      if (isFeedPage()) {
+        if (!initialized && !booting) {
+          boot();
+        } else if (initialized) {
+          reapply();
+          startIframeCheck();
+        }
+      } else {
+        initialized = false;
+        feedDoc = document;
+        sendBadgeCount(0);
+        if (sidebarInterval) clearInterval(sidebarInterval);
+        if (iframeCheckInterval) clearInterval(iframeCheckInterval);
+        if (mainPollInterval) clearInterval(mainPollInterval);
+        if (feedObserver) feedObserver.disconnect();
+      }
     };
     "use strict";
     const MIN_FEED_IFRAME_WIDTH = 500;
@@ -414,7 +442,7 @@
     const IFRAME_POLL_MAX_TICKS = 20;
     const SIDEBAR_POLL_INTERVAL_MS = 2e3;
     const SIDEBAR_POLL_MAX_TICKS = 15;
-    const SPA_POLL_INTERVAL_MS = 1e3;
+    const SPA_POLL_INTERVAL_MS = 3e3;
     const UNFOLLOW_CHECK_INTERVAL_MS = 500;
     const UNFOLLOW_MAX_CHECKS = 20;
     const UNFOLLOW_COLLAPSE_DELAY_MS = 1200;
@@ -471,25 +499,19 @@
     let iframeCheckInterval = null;
     boot();
     let lastUrl = location.href;
-    const urlPollInterval = setInterval(() => {
-      if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        if (isFeedPage()) {
-          if (!initialized && !booting) {
-            boot();
-          } else if (initialized) {
-            reapply();
-            startIframeCheck();
-          }
-        } else {
-          initialized = false;
-          feedDoc = document;
-          if (sidebarInterval) clearInterval(sidebarInterval);
-          if (iframeCheckInterval) clearInterval(iframeCheckInterval);
-          if (mainPollInterval) clearInterval(mainPollInterval);
-          if (feedObserver) feedObserver.disconnect();
-        }
-      }
+    window.addEventListener("popstate", handleFeedRouteChange);
+    const origPushState = history.pushState;
+    const origReplaceState = history.replaceState;
+    history.pushState = function() {
+      origPushState.apply(this, arguments);
+      handleFeedRouteChange();
+    };
+    history.replaceState = function() {
+      origReplaceState.apply(this, arguments);
+      handleFeedRouteChange();
+    };
+    setInterval(() => {
+      if (location.href !== lastUrl) handleFeedRouteChange();
     }, SPA_POLL_INTERVAL_MS);
   }
 })();

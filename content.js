@@ -7,6 +7,8 @@
     hideRecommended: true,
     hideNonConnections: false,
     hideSidebar: true,
+    feedKeywordFilterEnabled: true,
+    feedKeywords: [],
     // Jobs page
     sponsorCheckEnabled: true,
     unpaidCheckEnabled: true,
@@ -22,6 +24,14 @@
       keywords.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
       "i"
     );
+  }
+
+  // src/shared/badge.js
+  function sendBadgeCount(count) {
+    try {
+      chrome.runtime.sendMessage({ type: "updateBadge", count });
+    } catch (e) {
+    }
   }
 
   // src/content.js
@@ -338,6 +348,8 @@
         processedCards.add(card);
         if (cardHasRepostedText(card)) labelCard(card, "reposted");
       });
+      const flagged = document.querySelectorAll("[data-lj-reasons]").length;
+      sendBadgeCount(flagged);
     }, checkDetailForCard = function(card) {
       let labeled = false;
       if (detailPanelHasReposted()) {
@@ -773,6 +785,7 @@
       } else if (!onSearch) {
         const panel = document.getElementById("lj-filter-panel");
         if (panel) panel.remove();
+        sendBadgeCount(0);
       }
     }, onJobsMutation = function() {
       if (!isSearchPage()) return;

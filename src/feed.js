@@ -1,5 +1,6 @@
 import { SIFT_DEFAULTS, SIFT_STATS_DEFAULTS } from "./shared/defaults.js";
 import { matchesFeedKeyword } from "./shared/matching.js";
+import { sendBadgeCount } from "./shared/badge.js";
 
 if (chrome.runtime?.id) {
   "use strict";
@@ -15,7 +16,7 @@ if (chrome.runtime?.id) {
   const IFRAME_POLL_MAX_TICKS = 20;
   const SIDEBAR_POLL_INTERVAL_MS = 2000;
   const SIDEBAR_POLL_MAX_TICKS = 15;
-  const SPA_POLL_INTERVAL_MS = 1000;  // URL change detection interval
+  const SPA_POLL_INTERVAL_MS = 3000;  // URL fallback poll (primary detection via History API)
   const UNFOLLOW_CHECK_INTERVAL_MS = 500;
   const UNFOLLOW_MAX_CHECKS = 20;
   const UNFOLLOW_COLLAPSE_DELAY_MS = 1200;
@@ -345,6 +346,8 @@ if (chrome.runtime?.id) {
     // Also update breakdown if visible
     const tip = feedDoc.getElementById("lj-badge-tip");
     if (tip && tip.classList.contains("visible")) updateBreakdown();
+    // Update extension icon badge
+    sendBadgeCount(count);
   }
 
   function applyBodyClasses() {
@@ -536,28 +539,48 @@ if (chrome.runtime?.id) {
   // Boot immediately if on feed page
   boot();
 
-  // SPA navigation detector — URL polling because LinkedIn intercepts
-  // pushState/popstate and doesn't fire standard navigation events.
+  // === SPA navigation detection ===
+  // Primary: intercept History API (immediate response).
+  // Fallback: URL polling at reduced frequency for edge cases.
   let lastUrl = location.href;
-  const urlPollInterval = setInterval(() => {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      if (isFeedPage()) {
-        if (!initialized && !booting) {
-          boot();
-        } else if (initialized) {
-          reapply();
-          startIframeCheck();
-        }
-        // if booting, do nothing — boot() callback will finish init
-      } else {
-        initialized = false;
-        feedDoc = document;
-        if (sidebarInterval) clearInterval(sidebarInterval);
-        if (iframeCheckInterval) clearInterval(iframeCheckInterval);
-        if (mainPollInterval) clearInterval(mainPollInterval);
-        if (feedObserver) feedObserver.disconnect();
+
+  function handleFeedRouteChange() {
+    if (location.href === lastUrl) return;
+    lastUrl = location.href;
+    if (isFeedPage()) {
+      if (!initialized && !booting) {
+        boot();
+      } else if (initialized) {
+        reapply();
+        startIframeCheck();
       }
+      // if booting, do nothing — boot() callback will finish init
+    } else {
+      initialized = false;
+      feedDoc = document;
+      sendBadgeCount(0);
+      if (sidebarInterval) clearInterval(sidebarInterval);
+      if (iframeCheckInterval) clearInterval(iframeCheckInterval);
+      if (mainPollInterval) clearInterval(mainPollInterval);
+      if (feedObserver) feedObserver.disconnect();
     }
+  }
+
+  // History API interception (same pattern as content.js)
+  window.addEventListener("popstate", handleFeedRouteChange);
+  const origPushState = history.pushState;
+  const origReplaceState = history.replaceState;
+  history.pushState = function () {
+    origPushState.apply(this, arguments);
+    handleFeedRouteChange();
+  };
+  history.replaceState = function () {
+    origReplaceState.apply(this, arguments);
+    handleFeedRouteChange();
+  };
+
+  // Fallback poll (catches Navigation API, link clicks, etc.)
+  setInterval(() => {
+    if (location.href !== lastUrl) handleFeedRouteChange();
   }, SPA_POLL_INTERVAL_MS);
 }
