@@ -7,6 +7,8 @@
     hideRecommended: true,
     hideNonConnections: false,
     hideSidebar: true,
+    feedKeywordFilterEnabled: true,
+    feedKeywords: [],
     // Jobs page
     sponsorCheckEnabled: true,
     unpaidCheckEnabled: true,
@@ -22,6 +24,7 @@
       suggestedHidden: 0,
       recommendedHidden: 0,
       strangersHidden: 0,
+      keywordsHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0
     },
@@ -30,6 +33,7 @@
       suggestedHidden: 0,
       recommendedHidden: 0,
       strangersHidden: 0,
+      keywordsHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0
     }
@@ -46,6 +50,7 @@
       recommendedHidden: "Recommended Hidden",
       strangersHidden: "Strangers Hidden",
       jobsFlagged: "Jobs Flagged",
+      keywordsHidden: "Keywords Hidden",
       jobsScanned: "Jobs Scanned"
     };
     const tabBtns = document.querySelectorAll(".tab-btn");
@@ -212,6 +217,58 @@
       feedGroup.appendChild(createToggle("Hide Sidebar", settings.hideSidebar, function(v) {
         chrome.storage.local.set({ hideSidebar: v });
       }));
+      feedGroup.appendChild(createToggle("Hide by Keywords", settings.feedKeywordFilterEnabled, function(v) {
+        chrome.storage.local.set({ feedKeywordFilterEnabled: v });
+      }));
+      let kwAddRow = document.createElement("div");
+      kwAddRow.className = "list-search-row";
+      let kwInput = document.createElement("input");
+      kwInput.type = "text";
+      kwInput.placeholder = "Add keywords (comma-separated)\u2026";
+      kwInput.className = "list-search-input";
+      kwInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") addFeedKeywords();
+      });
+      let kwAddBtn = document.createElement("button");
+      kwAddBtn.className = "list-item-remove";
+      kwAddBtn.textContent = "+";
+      kwAddBtn.style.cssText = "font-size:16px;cursor:pointer;background:none;border:none;color:#D9797B;font-weight:bold;";
+      kwAddBtn.addEventListener("click", addFeedKeywords);
+      kwAddRow.appendChild(kwInput);
+      kwAddRow.appendChild(kwAddBtn);
+      feedGroup.appendChild(kwAddRow);
+      let renderFeedKw = createListSection(feedGroup, "Feed Keywords", settings.feedKeywords || [], function(kw) {
+        settings.feedKeywords = (settings.feedKeywords || []).filter(function(k) {
+          return k.toLowerCase() !== kw.toLowerCase();
+        });
+        chrome.storage.local.set({ feedKeywords: settings.feedKeywords });
+        renderFeedKw(settings.feedKeywords);
+      });
+      renderFeedKw(settings.feedKeywords || []);
+      function addFeedKeywords() {
+        let val = kwInput.value.trim();
+        if (!val) return;
+        let newKws = val.split(",").map(function(s) {
+          return s.trim();
+        }).filter(Boolean);
+        let existing = (settings.feedKeywords || []).map(function(k) {
+          return k.toLowerCase();
+        });
+        let added = [];
+        newKws.forEach(function(kw) {
+          if (!existing.includes(kw.toLowerCase())) {
+            existing.push(kw.toLowerCase());
+            added.push(kw);
+          }
+        });
+        if (added.length > 0) {
+          settings.feedKeywords = (settings.feedKeywords || []).concat(added);
+          chrome.storage.local.set({ feedKeywords: settings.feedKeywords });
+          renderFeedKw(settings.feedKeywords);
+          showToast(added.length + " keyword" + (added.length > 1 ? "s" : "") + " added");
+        }
+        kwInput.value = "";
+      }
       container.appendChild(feedGroup);
       let jobsGroup = document.createElement("div");
       jobsGroup.className = "section-group";
