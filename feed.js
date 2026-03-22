@@ -7,8 +7,10 @@
     hideRecommended: true,
     hideNonConnections: false,
     hideSidebar: true,
+    hidePolls: false,
     feedKeywordFilterEnabled: true,
     feedKeywords: [],
+    hasSeenOnboarding: false,
     // Jobs page
     sponsorCheckEnabled: true,
     unpaidCheckEnabled: true,
@@ -24,6 +26,7 @@
       suggestedHidden: 0,
       recommendedHidden: 0,
       strangersHidden: 0,
+      pollsHidden: 0,
       keywordsHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0
@@ -33,6 +36,7 @@
       suggestedHidden: 0,
       recommendedHidden: 0,
       strangersHidden: 0,
+      pollsHidden: 0,
       keywordsHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0
@@ -97,6 +101,17 @@
         }
       }
       return found;
+    }, detectContentTypes = function(article) {
+      const types = /* @__PURE__ */ new Set();
+      for (const el of article.querySelectorAll("span, p, div")) {
+        if (el.children.length > 0) continue;
+        const t = el.textContent.trim();
+        if (POLL_VOTE_RE.test(t) || t === "Show results") {
+          types.add("poll");
+          break;
+        }
+      }
+      return types;
     }, incrementStat = function(key) {
       pendingStats[key] = (pendingStats[key] || 0) + 1;
     }, flushStats = function() {
@@ -143,6 +158,14 @@
           if (hasFollow && !hasHeader) {
             article.dataset.ljNonConnection = "true";
             if (settings.hideNonConnections) incrementStat("strangersHidden");
+          }
+        }
+        if (!article.dataset.ljContentChecked) {
+          article.dataset.ljContentChecked = "1";
+          const contentTypes = detectContentTypes(article);
+          if (contentTypes.has("poll")) {
+            article.dataset.ljPoll = "true";
+            if (settings.hidePolls) incrementStat("pollsHidden");
           }
         }
         if (settings.feedKeywordFilterEnabled && settings.feedKeywords && settings.feedKeywords.length > 0) {
@@ -225,6 +248,7 @@
           "lj-hide-recommended",
           "lj-hide-non-connections",
           "lj-hide-sidebar",
+          "lj-hide-polls",
           "lj-hide-keyword-filtered"
         );
         showToast("Filters paused (Shift+J to resume)");
@@ -283,6 +307,7 @@
         Suggested: feedDoc.querySelectorAll('[data-lj-suggested="true"]').length,
         Recommended: feedDoc.querySelectorAll('[data-lj-recommended="true"]').length,
         Strangers: feedDoc.querySelectorAll('[data-lj-non-connection="true"]').length,
+        Polls: feedDoc.querySelectorAll('[data-lj-poll="true"]').length,
         Keywords: feedDoc.querySelectorAll('[data-lj-keyword-filtered="true"]').length
       };
       const lines = Object.entries(counts).filter(([, v]) => v > 0).map(([k, v]) => v + " " + k);
@@ -290,7 +315,7 @@
     }, updateBadgeCount = function() {
       const badge = feedDoc.getElementById("lj-mini-badge");
       if (!badge) return;
-      const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-keyword-filtered="true"]').length;
+      const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-poll="true"], [data-lj-keyword-filtered="true"]').length;
       badge.textContent = count > 0 ? "\u{1F50D} " + count + " filtered" : "\u{1F50D} Sift";
       const tip = feedDoc.getElementById("lj-badge-tip");
       if (tip && tip.classList.contains("visible")) updateBreakdown();
@@ -301,6 +326,7 @@
       feedDoc.body.classList.toggle("lj-hide-recommended", settings.hideRecommended);
       feedDoc.body.classList.toggle("lj-hide-non-connections", settings.hideNonConnections);
       feedDoc.body.classList.toggle("lj-hide-sidebar", settings.hideSidebar);
+      feedDoc.body.classList.toggle("lj-hide-polls", settings.hidePolls);
       feedDoc.body.classList.toggle("lj-hide-keyword-filtered", settings.feedKeywordFilterEnabled);
     }, hideSidebarElements = function() {
       feedDoc.querySelectorAll(SIDEBAR_SELECTOR_ALL).forEach((node) => {
@@ -399,6 +425,12 @@
         booting = false;
         reapply();
         startIframeCheck();
+        if (!settings.hasSeenOnboarding) {
+          setTimeout(() => {
+            showToast("Sift is active \u2014 filtering your feed. Click the Sift icon to customize.");
+          }, 1500);
+          chrome.storage.local.set({ hasSeenOnboarding: true });
+        }
       });
     }, startIframeCheck = function() {
       if (iframeCheckInterval) clearInterval(iframeCheckInterval);
@@ -450,7 +482,7 @@
     let initialized = false;
     let feedDoc = document;
     const DEFAULTS = SIFT_DEFAULTS;
-    const SETTING_KEYS = /* @__PURE__ */ new Set(["hidePromoted", "hideSuggested", "hideRecommended", "hideNonConnections", "hideSidebar", "feedKeywordFilterEnabled", "feedKeywords"]);
+    const SETTING_KEYS = /* @__PURE__ */ new Set(["hidePromoted", "hideSuggested", "hideRecommended", "hideNonConnections", "hideSidebar", "hidePolls", "feedKeywordFilterEnabled", "feedKeywords"]);
     let settings = { ...DEFAULTS };
     let nudgeTimer = null;
     const POST_TYPE_LABELS = /* @__PURE__ */ new Set([
@@ -460,6 +492,7 @@
       "Jobs recommended for you",
       "Popular course on LinkedIn Learning"
     ]);
+    const POLL_VOTE_RE = /^\d+ votes?$/;
     let pendingStats = {};
     let feedPaused = false;
     document.addEventListener("keydown", (e) => {

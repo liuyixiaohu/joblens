@@ -13,6 +13,7 @@ import { SIFT_DEFAULTS, SIFT_STATS_DEFAULTS } from "./shared/defaults.js";
     suggestedHidden: "Suggested Hidden",
     recommendedHidden: "Recommended Hidden",
     strangersHidden: "Strangers Hidden",
+    pollsHidden: "Polls Hidden",
     jobsFlagged: "Jobs Flagged",
     keywordsHidden: "Keywords Hidden",
     jobsScanned: "Jobs Scanned",
@@ -230,6 +231,9 @@ import { SIFT_DEFAULTS, SIFT_STATS_DEFAULTS } from "./shared/defaults.js";
     }));
     feedGroup.appendChild(createToggle("Hide Sidebar", settings.hideSidebar, function (v) {
       chrome.storage.local.set({ hideSidebar: v });
+    }));
+    feedGroup.appendChild(createToggle("Hide Polls", settings.hidePolls, function (v) {
+      chrome.storage.local.set({ hidePolls: v });
     }));
 
     // Feed Keyword Filter

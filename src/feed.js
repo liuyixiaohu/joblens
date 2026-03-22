@@ -47,7 +47,7 @@ if (chrome.runtime?.id) {
 
   // === Storage ===
   const DEFAULTS = SIFT_DEFAULTS;
-  const SETTING_KEYS = new Set(["hidePromoted", "hideSuggested", "hideRecommended", "hideNonConnections", "hideSidebar", "feedKeywordFilterEnabled", "feedKeywords"]);
+  const SETTING_KEYS = new Set(["hidePromoted", "hideSuggested", "hideRecommended", "hideNonConnections", "hideSidebar", "hidePolls", "feedKeywordFilterEnabled", "feedKeywords"]);
   let settings = { ...DEFAULTS };
 
   function loadSettings(cb) {
@@ -86,6 +86,23 @@ if (chrome.runtime?.id) {
       }
     }
     return found;
+  }
+
+  // === Content type detection (polls, etc.) ===
+  // Unlike label-based detection, these check for structural/content patterns within articles.
+  const POLL_VOTE_RE = /^\d+ votes?$/;
+
+  function detectContentTypes(article) {
+    const types = new Set();
+    for (const el of article.querySelectorAll("span, p, div")) {
+      if (el.children.length > 0) continue;
+      const t = el.textContent.trim();
+      if (POLL_VOTE_RE.test(t) || t === "Show results") {
+        types.add("poll");
+        break;
+      }
+    }
+    return types;
   }
 
   // === Stats counter (batched to avoid per-post storage I/O) ===
@@ -145,6 +162,16 @@ if (chrome.runtime?.id) {
         if (hasFollow && !hasHeader) {
           article.dataset.ljNonConnection = "true";
           if (settings.hideNonConnections) incrementStat("strangersHidden");
+        }
+      }
+
+      // Content type detection (polls, etc.) — one-time check like type labels
+      if (!article.dataset.ljContentChecked) {
+        article.dataset.ljContentChecked = "1";
+        const contentTypes = detectContentTypes(article);
+        if (contentTypes.has("poll")) {
+          article.dataset.ljPoll = "true";
+          if (settings.hidePolls) incrementStat("pollsHidden");
         }
       }
 
@@ -248,7 +275,7 @@ if (chrome.runtime?.id) {
       feedDoc.body.classList.remove(
         "lj-hide-promoted", "lj-hide-suggested",
         "lj-hide-recommended", "lj-hide-non-connections", "lj-hide-sidebar",
-        "lj-hide-keyword-filtered"
+        "lj-hide-polls", "lj-hide-keyword-filtered"
       );
       showToast("Filters paused (Shift+J to resume)");
     } else {
@@ -332,6 +359,7 @@ if (chrome.runtime?.id) {
       Suggested: feedDoc.querySelectorAll('[data-lj-suggested="true"]').length,
       Recommended: feedDoc.querySelectorAll('[data-lj-recommended="true"]').length,
       Strangers: feedDoc.querySelectorAll('[data-lj-non-connection="true"]').length,
+      Polls: feedDoc.querySelectorAll('[data-lj-poll="true"]').length,
       Keywords: feedDoc.querySelectorAll('[data-lj-keyword-filtered="true"]').length,
     };
     const lines = Object.entries(counts).filter(([, v]) => v > 0).map(([k, v]) => v + " " + k);
@@ -341,7 +369,7 @@ if (chrome.runtime?.id) {
   function updateBadgeCount() {
     const badge = feedDoc.getElementById("lj-mini-badge");
     if (!badge) return;
-    const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-keyword-filtered="true"]').length;
+    const count = feedDoc.querySelectorAll('[data-lj-promoted="true"], [data-lj-suggested="true"], [data-lj-recommended="true"], [data-lj-non-connection="true"], [data-lj-poll="true"], [data-lj-keyword-filtered="true"]').length;
     badge.textContent = count > 0 ? "\uD83D\uDD0D " + count + " filtered" : "\uD83D\uDD0D Sift";
     // Also update breakdown if visible
     const tip = feedDoc.getElementById("lj-badge-tip");
@@ -356,6 +384,7 @@ if (chrome.runtime?.id) {
     feedDoc.body.classList.toggle("lj-hide-recommended", settings.hideRecommended);
     feedDoc.body.classList.toggle("lj-hide-non-connections", settings.hideNonConnections);
     feedDoc.body.classList.toggle("lj-hide-sidebar", settings.hideSidebar);
+    feedDoc.body.classList.toggle("lj-hide-polls", settings.hidePolls);
     feedDoc.body.classList.toggle("lj-hide-keyword-filtered", settings.feedKeywordFilterEnabled);
   }
 
@@ -514,6 +543,13 @@ if (chrome.runtime?.id) {
       reapply();
       // Iframe may not be ready yet on initial load — poll for it
       startIframeCheck();
+      // One-time onboarding toast for new users
+      if (!settings.hasSeenOnboarding) {
+        setTimeout(() => {
+          showToast("Sift is active \u2014 filtering your feed. Click the Sift icon to customize.");
+        }, 1500);
+        chrome.storage.local.set({ hasSeenOnboarding: true });
+      }
     });
   }
 

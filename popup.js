@@ -7,8 +7,10 @@
     hideRecommended: true,
     hideNonConnections: false,
     hideSidebar: true,
+    hidePolls: false,
     feedKeywordFilterEnabled: true,
     feedKeywords: [],
+    hasSeenOnboarding: false,
     // Jobs page
     sponsorCheckEnabled: true,
     unpaidCheckEnabled: true,
@@ -24,6 +26,7 @@
       suggestedHidden: 0,
       recommendedHidden: 0,
       strangersHidden: 0,
+      pollsHidden: 0,
       keywordsHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0
@@ -33,6 +36,7 @@
       suggestedHidden: 0,
       recommendedHidden: 0,
       strangersHidden: 0,
+      pollsHidden: 0,
       keywordsHidden: 0,
       jobsFlagged: 0,
       jobsScanned: 0
@@ -49,6 +53,7 @@
       suggestedHidden: "Suggested Hidden",
       recommendedHidden: "Recommended Hidden",
       strangersHidden: "Strangers Hidden",
+      pollsHidden: "Polls Hidden",
       jobsFlagged: "Jobs Flagged",
       keywordsHidden: "Keywords Hidden",
       jobsScanned: "Jobs Scanned"
@@ -216,6 +221,9 @@
       }));
       feedGroup.appendChild(createToggle("Hide Sidebar", settings.hideSidebar, function(v) {
         chrome.storage.local.set({ hideSidebar: v });
+      }));
+      feedGroup.appendChild(createToggle("Hide Polls", settings.hidePolls, function(v) {
+        chrome.storage.local.set({ hidePolls: v });
       }));
       feedGroup.appendChild(createToggle("Hide by Keywords", settings.feedKeywordFilterEnabled, function(v) {
         chrome.storage.local.set({ feedKeywordFilterEnabled: v });

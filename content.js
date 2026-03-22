@@ -7,8 +7,10 @@
     hideRecommended: true,
     hideNonConnections: false,
     hideSidebar: true,
+    hidePolls: false,
     feedKeywordFilterEnabled: true,
     feedKeywords: [],
+    hasSeenOnboarding: false,
     // Jobs page
     sponsorCheckEnabled: true,
     unpaidCheckEnabled: true,
